@@ -4,7 +4,6 @@ export interface User {
   siteId: string;
   role: 'Fixed' | 'Roaming';
   shiftGroup: string;
-  lineId?: string;
   avatarUrl?: string;
 }
 

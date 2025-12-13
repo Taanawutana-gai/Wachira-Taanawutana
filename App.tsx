@@ -352,16 +352,17 @@ const App: React.FC = () => {
                         <span className="text-slate-400">Site ID</span>
                         <span className="font-medium text-slate-700">{user.siteId}</span>
                     </div>
-                    {/* Shift removed as it was Col F, now replaced by LINE ID logic, or empty */}
-                    
+                    <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
+                        <span className="text-slate-400">Shift</span>
+                        <span className="font-medium text-slate-700">{user.shiftGroup || '-'}</span>
+                    </div>
                     <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
                         <span className="text-slate-400">LINE ID</span>
                         <div className="flex items-center gap-2">
-                            {/* Display user.lineId from DB if available, else local lineUserId */}
-                            <span className="font-medium text-slate-700 text-xs truncate max-w-[120px]" title={user.lineId || lineUserId}>
-                                {user.lineId || lineUserId || 'Not connected'}
+                            <span className="font-medium text-slate-700 text-xs truncate max-w-[120px]" title={lineUserId || "Not connected"}>
+                                {lineUserId || 'Not connected'}
                             </span>
-                            {!user.lineId && !lineUserId && (
+                            {!lineUserId && (
                                 <button 
                                     onClick={handleLiffLogin}
                                     className="text-[10px] bg-[#06C755] hover:bg-[#05b34c] text-white px-2 py-0.5 rounded shadow-sm"
