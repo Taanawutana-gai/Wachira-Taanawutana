@@ -9,7 +9,9 @@
 const SHEET_EMPLOY_DB = "Employ_DB";
 const SHEET_LOGS = "Logs";
 const SHEET_SITE_CONFIG = "Site_Config";
-const SHEET_SHIFT_TABLE = "Shift_Table"; // Added per spec 4.4
+const SHEET_SHIFT_TABLE = "Shift_Table"; 
+
+const TIMEZONE = "Asia/Bangkok"; // Force Thai Timezone
 
 // Handle GET requests to verify the script is running
 function doGet(e) {
@@ -55,7 +57,6 @@ function handleLogin(username, password) {
     return { success: false, message: "Database is empty. Please add users." };
   }
 
-  // Find user matching username AND password
   const userRow = db.find(row => String(row[0]).trim() === String(username).trim() && String(row[1]).trim() === String(password).trim());
   
   if (!userRow) {
@@ -78,7 +79,6 @@ function handleClockIn(data) {
   const { username, latitude, longitude, accuracy } = data;
   
   // Spec Section 7: GPS Accuracy Check
-  // If accuracy is worse than 200 meters, reject it.
   if (accuracy && accuracy > 200) {
     return { success: false, message: `GPS signal too weak (Accuracy: ${Math.round(accuracy)}m). Please move outdoors.` };
   }
@@ -95,22 +95,22 @@ function handleClockIn(data) {
     role: userRow[4]
   };
   
-  const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+  // Fix: Use Thai Timezone for Date String
+  const todayStr = getThaiDateString(new Date());
   
-  // Check Duplicate
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
   logs.shift(); // Remove Header
   
+  // Check Duplicate using Thai Date
   const existingLog = logs.find(row => 
-    formatDate(row[0]) === today && String(row[1]) === user.username
+    getThaiDateString(row[0]) === todayStr && String(row[1]) === user.username
   );
   
   if (existingLog && existingLog[3] !== "") { 
     return { success: false, message: "Already clocked in today." };
   }
 
-  // Logic based on Role
   if (user.role === 'Fixed') {
     const siteConfig = getSheetData(SHEET_SITE_CONFIG);
     const site = siteConfig.find(row => String(row[0]) === user.siteId);
@@ -125,20 +125,21 @@ function handleClockIn(data) {
     }
   }
   
-  const timestamp = new Date().toLocaleTimeString('th-TH', { hour12: false });
+  // Time in HH:mm:ss format (Thai Time)
+  const timestamp = Utilities.formatDate(new Date(), TIMEZONE, "HH:mm:ss");
   
   logsSheet.appendRow([
-    today,
+    todayStr, // Store YYYY-MM-DD string to avoid timezone confusion in sheet cells
     user.username,
     user.name,
     timestamp,
     latitude,
     longitude,
-    "", // Clock Out Time
-    "", // Out Lat
-    "", // Out Lng
+    "", 
+    "", 
+    "", 
     user.siteId,
-    "" // Working Hours
+    "" 
   ]);
   
   return { success: true, message: `Clock In Successful at ${timestamp}` };
@@ -147,7 +148,6 @@ function handleClockIn(data) {
 function handleClockOut(data) {
   const { username, latitude, longitude, accuracy } = data;
 
-  // Spec Section 7: GPS Accuracy Check
   if (accuracy && accuracy > 200) {
     return { success: false, message: `GPS signal too weak (Accuracy: ${Math.round(accuracy)}m). Please move outdoors.` };
   }
@@ -157,17 +157,18 @@ function handleClockOut(data) {
   if (!userRow) return { success: false, message: "User not found" };
   
   const user = { username: userRow[0], role: userRow[4], siteId: userRow[3] };
-  const today = new Date().toISOString().split('T')[0];
+  
+  // Fix: Use Thai Timezone
+  const todayStr = getThaiDateString(new Date());
   
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
   logs.shift(); // Remove Header
   
   let rowIndex = -1;
-  // Note: logs array is 0-indexed, but logsSheet rows are 1-indexed.
-  // logs[i] corresponds to row (i + 2) because we shifted headers.
   for (let i = 0; i < logs.length; i++) {
-    if (formatDate(logs[i][0]) === today && String(logs[i][1]) === user.username) {
+    // Compare dates using strict Thai Timezone formatting
+    if (getThaiDateString(logs[i][0]) === todayStr && String(logs[i][1]) === user.username) {
       rowIndex = i + 2; 
       break;
     }
@@ -195,7 +196,7 @@ function handleClockOut(data) {
   }
   
   const timestamp = new Date();
-  const timeStr = timestamp.toLocaleTimeString('th-TH', { hour12: false });
+  const timeStr = Utilities.formatDate(timestamp, TIMEZONE, "HH:mm:ss");
   
   const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue(); // Col D is InTime
   let hoursWorked = 0;
@@ -229,18 +230,27 @@ function sendJSON(content) {
   return ContentService.createTextOutput(JSON.stringify(content)).setMimeType(ContentService.MimeType.JSON);
 }
 
-function formatDate(dateObj) {
+// Helper: Get Date String in YYYY-MM-DD (Thai Time)
+function getThaiDateString(dateObj) {
   if (!dateObj) return "";
-  const d = new Date(dateObj);
-  // Guard against Invalid Date
-  if (isNaN(d.getTime())) return ""; 
-  return d.toISOString().split('T')[0];
+  try {
+    // Handles both Date object and date string from sheet
+    const d = new Date(dateObj);
+    if (isNaN(d.getTime())) return "";
+    return Utilities.formatDate(d, TIMEZONE, "yyyy-MM-dd");
+  } catch (e) {
+    return "";
+  }
 }
 
 function parseTime(timeVal) {
   if (!timeVal) return null;
   
+  // If Sheets returns a Date object directly (sometimes happens with time formatting)
   if (timeVal instanceof Date) {
+    // If it's a full date object, we need to normalize it to today to calculate difference
+    const now = new Date();
+    timeVal.setFullYear(now.getFullYear(), now.getMonth(), now.getDate());
     return timeVal;
   }
   
@@ -282,11 +292,8 @@ function setup() {
     }
   }
   
-  // STRUCTURE MATCHING WORK INSTRUCTION
   createIfMissing(SHEET_EMPLOY_DB, ["Username", "Password", "Name", "Site_ID", "Role_Type", "Shift_Group"]);
   createIfMissing(SHEET_LOGS, ["Date", "Username", "Name", "Clock_In_Time", "Clock_In_Lat", "Clock_In_Lng", "Clock_Out_Time", "Clock_Out_Lat", "Clock_Out_Lng", "Site_ID", "Working_Hours"]);
   createIfMissing(SHEET_SITE_CONFIG, ["Site_ID", "Site_Name", "Latitude", "Longitude", "Radius_Allowed"]);
-  
-  // ADDED PER SPEC 4.4
   createIfMissing(SHEET_SHIFT_TABLE, ["Shift_Group", "Shift_Name", "Start_Time", "End_Time", "Late_Time"]);
 }
