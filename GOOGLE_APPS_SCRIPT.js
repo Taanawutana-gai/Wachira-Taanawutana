@@ -198,22 +198,24 @@ function handleClockOut(data) {
   const timestamp = new Date();
   const timeStr = Utilities.formatDate(timestamp, TIMEZONE, "HH:mm:ss");
   
+  // --- Working Hours Calculation (Column K) ---
   const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue(); // Col D is InTime
-  let hoursWorked = 0;
+  let hoursWorked = "";
   
   if (inTimeVal) {
-    const d1 = parseTime(inTimeVal);
-    const d2 = parseTime(timeStr);
+    const d1 = parseTime(inTimeVal); // Clock In
+    const d2 = parseTime(timeStr);   // Clock Out
     if (d1 && d2) {
-      const diffMs = d2 - d1;
+      const diffMs = d2.getTime() - d1.getTime();
+      // Convert ms to hours (decimal)
       hoursWorked = (diffMs / (1000 * 60 * 60)).toFixed(2); 
     }
   }
   
-  logsSheet.getRange(rowIndex, 7).setValue(timeStr);
-  logsSheet.getRange(rowIndex, 8).setValue(latitude);
-  logsSheet.getRange(rowIndex, 9).setValue(longitude);
-  logsSheet.getRange(rowIndex, 11).setValue(hoursWorked);
+  logsSheet.getRange(rowIndex, 7).setValue(timeStr);      // Clock Out Time
+  logsSheet.getRange(rowIndex, 8).setValue(latitude);     // Out Lat
+  logsSheet.getRange(rowIndex, 9).setValue(longitude);    // Out Lng
+  logsSheet.getRange(rowIndex, 11).setValue(hoursWorked); // Working Hours (Col K)
   
   return { success: true, message: `Clock Out Successful. Hours: ${hoursWorked}` };
 }
@@ -234,7 +236,6 @@ function sendJSON(content) {
 function getThaiDateString(dateObj) {
   if (!dateObj) return "";
   try {
-    // Handles both Date object and date string from sheet
     const d = new Date(dateObj);
     if (isNaN(d.getTime())) return "";
     return Utilities.formatDate(d, TIMEZONE, "yyyy-MM-dd");
@@ -243,26 +244,29 @@ function getThaiDateString(dateObj) {
   }
 }
 
+// Robust time parser that normalizes date to Epoch (1970-01-01) for pure time comparison
 function parseTime(timeVal) {
   if (!timeVal) return null;
   
-  // If Sheets returns a Date object directly (sometimes happens with time formatting)
-  if (timeVal instanceof Date) {
-    // If it's a full date object, we need to normalize it to today to calculate difference
-    const now = new Date();
-    timeVal.setFullYear(now.getFullYear(), now.getMonth(), now.getDate());
-    return timeVal;
-  }
+  let date = new Date();
   
-  if (typeof timeVal === 'string') {
-    const d = new Date();
+  // Case 1: Value is already a Date object (from formatted Google Sheet cell)
+  if (timeVal instanceof Date) {
+    date = new Date(timeVal.getTime());
+  } 
+  // Case 2: Value is string "HH:mm:ss"
+  else if (typeof timeVal === 'string') {
     const parts = timeVal.split(':');
     if (parts.length < 2) return null;
-    d.setHours(parts[0], parts[1], parts[2] || 0);
-    return d;
+    date.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), parseInt(parts[2] || 0, 10), 0);
+  } else {
+    return null;
   }
   
-  return null;
+  // Normalize date part to 1970-01-01 to ignore date differences
+  date.setFullYear(1970, 0, 1);
+  
+  return date;
 }
 
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
