@@ -2,13 +2,14 @@
  * GEO CLOCK AI - BACKEND (Username/Password Version)
  * 
  * SETUP:
- * 1. Create Sheets: "Employ_DB", "Logs", "Site_Config"
+ * 1. Create Sheets: "Employ_DB", "Logs", "Site_Config", "Shift_Table"
  * 2. Deploy as Web App -> Execute as: Me -> Who has access: Anyone
  */
 
 const SHEET_EMPLOY_DB = "Employ_DB";
 const SHEET_LOGS = "Logs";
 const SHEET_SITE_CONFIG = "Site_Config";
+const SHEET_SHIFT_TABLE = "Shift_Table"; // Added per spec 4.4
 
 // Handle GET requests to verify the script is running
 function doGet(e) {
@@ -74,8 +75,14 @@ function handleLogin(username, password) {
 }
 
 function handleClockIn(data) {
-  const { username, latitude, longitude } = data;
+  const { username, latitude, longitude, accuracy } = data;
   
+  // Spec Section 7: GPS Accuracy Check
+  // If accuracy is worse than 200 meters, reject it.
+  if (accuracy && accuracy > 200) {
+    return { success: false, message: `GPS signal too weak (Accuracy: ${Math.round(accuracy)}m). Please move outdoors.` };
+  }
+
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
   
@@ -93,7 +100,7 @@ function handleClockIn(data) {
   // Check Duplicate
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
-  logs.shift(); // IMPORTANT: Remove Header Row to prevent "Invalid time value" error
+  logs.shift(); // Remove Header
   
   const existingLog = logs.find(row => 
     formatDate(row[0]) === today && String(row[1]) === user.username
@@ -138,7 +145,12 @@ function handleClockIn(data) {
 }
 
 function handleClockOut(data) {
-  const { username, latitude, longitude } = data;
+  const { username, latitude, longitude, accuracy } = data;
+
+  // Spec Section 7: GPS Accuracy Check
+  if (accuracy && accuracy > 200) {
+    return { success: false, message: `GPS signal too weak (Accuracy: ${Math.round(accuracy)}m). Please move outdoors.` };
+  }
   
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
@@ -149,7 +161,7 @@ function handleClockOut(data) {
   
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
-  logs.shift(); // Remove Header Row
+  logs.shift(); // Remove Header
   
   let rowIndex = -1;
   // Note: logs array is 0-indexed, but logsSheet rows are 1-indexed.
@@ -228,12 +240,10 @@ function formatDate(dateObj) {
 function parseTime(timeVal) {
   if (!timeVal) return null;
   
-  // If Sheets returns a Date object directly
   if (timeVal instanceof Date) {
     return timeVal;
   }
   
-  // If it's a string like "14:30:00"
   if (typeof timeVal === 'string') {
     const d = new Date();
     const parts = timeVal.split(':');
@@ -272,8 +282,11 @@ function setup() {
     }
   }
   
-  // NEW STRUCTURE
+  // STRUCTURE MATCHING WORK INSTRUCTION
   createIfMissing(SHEET_EMPLOY_DB, ["Username", "Password", "Name", "Site_ID", "Role_Type", "Shift_Group"]);
   createIfMissing(SHEET_LOGS, ["Date", "Username", "Name", "Clock_In_Time", "Clock_In_Lat", "Clock_In_Lng", "Clock_Out_Time", "Clock_Out_Lat", "Clock_Out_Lng", "Site_ID", "Working_Hours"]);
   createIfMissing(SHEET_SITE_CONFIG, ["Site_ID", "Site_Name", "Latitude", "Longitude", "Radius_Allowed"]);
+  
+  // ADDED PER SPEC 4.4
+  createIfMissing(SHEET_SHIFT_TABLE, ["Shift_Group", "Shift_Name", "Start_Time", "End_Time", "Late_Time"]);
 }

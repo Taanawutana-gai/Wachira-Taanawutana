@@ -1,7 +1,7 @@
 import { GeoLocationData, LogType, ApiResponse } from '../types';
 
 // TODO: UPDATE THIS URL AFTER "NEW DEPLOYMENT"
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfho3Gct3wnwG-kHKbY1tJ0BlI1gBXzX3M5Emmi6qO29-5my746jGIgmUGg2WYZe1Ebw/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbyisykBIuJCmlJs2kmLWyEoTVUot0Ncl5MURHQFH0dB98JIr3FTFwq2JJYXA35EO1Jwrw/exec';
 
 export const loginUser = async (username: string, password: string): Promise<ApiResponse> => {
   try {
