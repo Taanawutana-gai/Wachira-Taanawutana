@@ -139,113 +139,111 @@ const App: React.FC = () => {
     );
   };
 
-  // --- UI Components ---
-
-  const LoginScreen = () => (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 relative">
-       {/* Login Header Icon */}
-       <div className="absolute top-0 right-0 p-6">
-          <button
-            onClick={() => setIsLineModalOpen(true)}
-            className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors border border-slate-100"
-            title="Check LINE ID"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-          </button>
-       </div>
-
-       <div className="w-full max-w-sm bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50">
-          <div className="text-center mb-8">
-            <h1 className="text-3xl font-bold text-slate-800 mb-2">GeoClock AI</h1>
-            <p className="text-slate-500">Employee Attendance</p>
-          </div>
-
-          <form onSubmit={handleLogin} className="space-y-4">
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Username (LINE ID)</label>
-              <input 
-                type="text" 
-                value={usernameInput}
-                readOnly
-                className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed outline-none font-medium font-mono text-sm"
-                placeholder={lineUserId ? "LINE ID" : "Click icon ↗ to Connect LINE"}
-              />
-            </div>
-            <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Password</label>
-              <input 
-                type="password" 
-                value={passwordInput}
-                onChange={(e) => setPasswordInput(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all font-medium text-slate-700"
-                placeholder="Enter password"
-              />
-            </div>
-            
-            {/* Error / Access Denied Message */}
-            {error && (
-              <div className="bg-red-50 p-3 rounded-lg flex items-center gap-2 border border-red-100 animate-pulse">
-                <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
-                <span className="text-red-600 text-sm font-medium">{error}</span>
-              </div>
-            )}
-
-            <Button 
-              type="submit" 
-              variant="primary" 
-              fullWidth 
-              isLoading={isLoading}
-              className="mt-4"
-              disabled={!usernameInput}
-            >
-              Log In
-            </Button>
-          </form>
-       </div>
-
-       {/* Line ID Modal for Login Screen */}
-       {isLineModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-3xl shadow-2xl max-w-xs w-full p-6 animate-in zoom-in-95">
-                <div className="text-center mb-6">
-                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
-                    </div>
-                    <h3 className="text-lg font-bold text-slate-800">User Identification</h3>
-                    <p className="text-slate-400 text-xs mt-1">Check your LINE ID for registration</p>
-                </div>
-
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 text-center">
-                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">My LINE User ID</p>
-                    <div className="relative group">
-                        <code className="block font-mono text-sm text-slate-700 break-all bg-white p-3 rounded-lg border border-slate-200 select-all">
-                            {lineUserId || "Not Connected"}
-                        </code>
-                    </div>
-                </div>
-
-                <div className="space-y-3">
-                     {!lineUserId && (
-                        <Button 
-                            fullWidth 
-                            onClick={handleLiffLogin}
-                            className="bg-[#06C755] hover:bg-[#05b34c] text-white"
-                        >
-                            Connect LINE
-                        </Button>
-                     )}
-                    <Button variant="outline" fullWidth onClick={() => setIsLineModalOpen(false)}>
-                        Close
-                    </Button>
-                </div>
-            </div>
-        </div>
-       )}
-    </div>
-  );
+  // --- UI Rendering ---
 
   if (!user) {
-    return <LoginScreen />;
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 relative">
+         {/* Login Header Icon */}
+         <div className="absolute top-0 right-0 p-6">
+            <button
+              onClick={() => setIsLineModalOpen(true)}
+              className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors border border-slate-100"
+              title="Check LINE ID"
+            >
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+            </button>
+         </div>
+
+         <div className="w-full max-w-sm bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50">
+            <div className="text-center mb-8">
+              <h1 className="text-3xl font-bold text-slate-800 mb-2">GeoClock AI</h1>
+              <p className="text-slate-500">Employee Attendance</p>
+            </div>
+
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Username (LINE ID)</label>
+                <input 
+                  type="text" 
+                  value={usernameInput}
+                  readOnly
+                  className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed outline-none font-medium font-mono text-sm"
+                  placeholder={lineUserId ? "LINE ID" : "Click icon ↗ to Connect LINE"}
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Password</label>
+                <input 
+                  type="password" 
+                  value={passwordInput}
+                  onChange={(e) => setPasswordInput(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all font-medium text-slate-700"
+                  placeholder="Enter password"
+                />
+              </div>
+              
+              {/* Error / Access Denied Message */}
+              {error && (
+                <div className="bg-red-50 p-3 rounded-lg flex items-center gap-2 border border-red-100 animate-pulse">
+                  <svg className="w-5 h-5 text-red-500 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                  <span className="text-red-600 text-sm font-medium">{error}</span>
+                </div>
+              )}
+
+              <Button 
+                type="submit" 
+                variant="primary" 
+                fullWidth 
+                isLoading={isLoading}
+                className="mt-4"
+                disabled={!usernameInput}
+              >
+                Log In
+              </Button>
+            </form>
+         </div>
+
+         {/* Line ID Modal for Login Screen */}
+         {isLineModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white rounded-3xl shadow-2xl max-w-xs w-full p-6 animate-in zoom-in-95">
+                  <div className="text-center mb-6">
+                      <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+                      </div>
+                      <h3 className="text-lg font-bold text-slate-800">User Identification</h3>
+                      <p className="text-slate-400 text-xs mt-1">Check your LINE ID for registration</p>
+                  </div>
+
+                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 text-center">
+                      <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">My LINE User ID</p>
+                      <div className="relative group">
+                          <code className="block font-mono text-sm text-slate-700 break-all bg-white p-3 rounded-lg border border-slate-200 select-all">
+                              {lineUserId || "Not Connected"}
+                          </code>
+                      </div>
+                  </div>
+
+                  <div className="space-y-3">
+                       {!lineUserId && (
+                          <Button 
+                              fullWidth 
+                              onClick={handleLiffLogin}
+                              className="bg-[#06C755] hover:bg-[#05b34c] text-white"
+                          >
+                              Connect LINE
+                          </Button>
+                       )}
+                      <Button variant="outline" fullWidth onClick={() => setIsLineModalOpen(false)}>
+                          Close
+                      </Button>
+                  </div>
+              </div>
+          </div>
+         )}
+      </div>
+    );
   }
 
   // --- Main Dashboard (Authorized) ---
