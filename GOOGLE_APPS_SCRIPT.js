@@ -67,6 +67,7 @@ function handleLogin(username, password) {
     success: true,
     user: {
       username: userRow[0],
+      password: userRow[1], // Include Password (Col B) in response
       name: userRow[2],
       siteId: userRow[3],
       role: userRow[4],

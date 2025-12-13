@@ -345,8 +345,8 @@ const App: React.FC = () => {
 
                 <div className="w-full bg-slate-50 rounded-xl p-4 space-y-3 mb-6">
                     <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
-                        <span className="text-slate-400">Staff ID</span>
-                        <span className="font-medium text-slate-700">{user.username}</span>
+                        <span className="text-slate-400">Username</span>
+                        <span className="font-medium text-slate-700">{user.password}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
                         <span className="text-slate-400">Site ID</span>
