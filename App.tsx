@@ -33,6 +33,8 @@ const App: React.FC = () => {
           if (liff.isLoggedIn()) {
             const profile = await liff.getProfile();
             setLineUserId(profile.userId);
+            // Auto-fill username with LINE ID
+            setUsernameInput(profile.userId);
           }
         }
       } catch (err) {
@@ -41,6 +43,13 @@ const App: React.FC = () => {
     };
     initLiff();
   }, []);
+
+  // Sync usernameInput if lineUserId changes later
+  useEffect(() => {
+    if (lineUserId) {
+      setUsernameInput(lineUserId);
+    }
+  }, [lineUserId]);
 
   const handleLiffLogin = () => {
     // @ts-ignore
@@ -55,7 +64,7 @@ const App: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!usernameInput || !passwordInput) {
-      setError("Please enter username and password");
+      setError("Please connect LINE and enter password");
       return;
     }
 
@@ -81,7 +90,12 @@ const App: React.FC = () => {
 
   const handleLogout = () => {
     setUser(null);
-    setUsernameInput("");
+    // Keep the username filled if LINE ID is present
+    if (lineUserId) {
+        setUsernameInput(lineUserId);
+    } else {
+        setUsernameInput("");
+    }
     setPasswordInput("");
     setSuccess(null);
     setError(null);
@@ -148,13 +162,13 @@ const App: React.FC = () => {
 
           <form onSubmit={handleLogin} className="space-y-4">
             <div>
-              <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Username</label>
+              <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Username (LINE ID)</label>
               <input 
                 type="text" 
                 value={usernameInput}
-                onChange={(e) => setUsernameInput(e.target.value)}
-                className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 outline-none transition-all font-medium text-slate-700"
-                placeholder="Enter username"
+                readOnly
+                className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 cursor-not-allowed outline-none font-medium font-mono text-sm"
+                placeholder={lineUserId ? "LINE ID" : "Click icon ↗ to Connect LINE"}
               />
             </div>
             <div>
@@ -182,6 +196,7 @@ const App: React.FC = () => {
               fullWidth 
               isLoading={isLoading}
               className="mt-4"
+              disabled={!usernameInput}
             >
               Log In
             </Button>
