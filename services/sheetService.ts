@@ -1,27 +1,47 @@
-import { AttendanceLog } from '../types';
+import { GeoLocationData, LogType, ApiResponse } from '../types';
 
-/**
- * Sends the attendance log to a Google Sheet via Google Apps Script Web App.
- * 
- * Note: This uses mode: 'no-cors' which allows the request to be sent to the 
- * script URL without reading the response. This is the standard way to interact 
- * with simple public GAS Web Apps from client-side JS.
- */
-export const sendToGoogleSheet = async (url: string, log: AttendanceLog): Promise<boolean> => {
-  if (!url) return false;
+// Hardcoded URL from Work Instruction
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby_3_9XdI6EKiG2otT9pRPrUAzo77t1ftN8Lw3p3eALrDS_efVCs7A7_zt87tFLqhIf/exec';
 
+export const checkUserStatus = async (lineUserId: string): Promise<ApiResponse> => {
   try {
-    await fetch(url, {
-      method: "POST",
-      mode: "no-cors", 
-      headers: {
-        "Content-Type": "text/plain", // text/plain avoids preflight OPTIONS request which GAS often blocks
-      },
-      body: JSON.stringify(log),
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'cors', // Ensure Script is deployed with "Anyone" access
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'CHECK_USER',
+        lineUserId: lineUserId
+      })
     });
-    return true;
+    return await response.json();
   } catch (error) {
-    console.error("Failed to sync to Google Sheet", error);
-    return false;
+    console.error("Check User Error:", error);
+    return { success: false, message: "Connection failed" };
+  }
+};
+
+export const sendClockAction = async (
+  lineUserId: string, 
+  type: LogType, 
+  location: GeoLocationData
+): Promise<ApiResponse> => {
+  try {
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: type, // CLOCK_IN or CLOCK_OUT
+        lineUserId: lineUserId,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        accuracy: location.accuracy
+      })
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("Clock Action Error:", error);
+    return { success: false, message: "Network error during clocking." };
   }
 };

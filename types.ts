@@ -1,6 +1,10 @@
 export interface User {
-  username: string;
-  fullName: string;
+  lineUserId: string;
+  name: string;
+  siteId: string;
+  role: 'Fixed' | 'Roaming';
+  shiftGroup: string;
+  avatarUrl?: string;
 }
 
 export enum LogType {
@@ -15,15 +19,17 @@ export interface GeoLocationData {
 }
 
 export interface AttendanceLog {
-  id: string;
-  userId: string;
-  type: LogType;
-  timestamp: number; // Date.now()
-  location: GeoLocationData;
-  aiMessage?: string; // Optional motivational message
+  id: string; // Used for UI key
+  userId?: string;
+  date: string;
+  clockInTime?: string;
+  clockOutTime?: string;
+  workingHours?: string;
 }
 
-export interface DailyStats {
-  day: string;
-  hours: number;
+export interface ApiResponse {
+  success: boolean;
+  message?: string;
+  user?: User;
+  logs?: any[];
 }
