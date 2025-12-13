@@ -345,7 +345,7 @@ const App: React.FC = () => {
 
                 <div className="w-full bg-slate-50 rounded-xl p-4 space-y-3 mb-6">
                     <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
-                        <span className="text-slate-400">Username</span>
+                        <span className="text-slate-400">Staff ID</span>
                         <span className="font-medium text-slate-700">{user.username}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
@@ -353,7 +353,7 @@ const App: React.FC = () => {
                         <span className="font-medium text-slate-700">{user.siteId}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
-                        <span className="text-slate-400">Shift</span>
+                        <span className="text-slate-400">Position</span>
                         <span className="font-medium text-slate-700">{user.shiftGroup || '-'}</span>
                     </div>
                     <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
