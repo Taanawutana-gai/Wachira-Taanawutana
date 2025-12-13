@@ -1,5 +1,5 @@
 /**
- * GEO CLOCK AI - BACKEND (LINE ID Version)
+ * GEO CLOCK AI - BACKEND (Username/Password Version)
  * 
  * SETUP:
  * 1. Create Sheets: "Employ_DB", "Logs", "Site_Config"
@@ -16,8 +16,8 @@ function doPost(e) {
   try {
     const data = JSON.parse(e.postData.contents);
     
-    if (data.action === "CHECK_USER") {
-      return sendJSON(handleCheckUser(data.lineUserId));
+    if (data.action === "LOGIN_USER") {
+      return sendJSON(handleLogin(data.username, data.password));
     }
     
     if (data.action === "CLOCK_IN") {
@@ -37,40 +37,43 @@ function doPost(e) {
   }
 }
 
-function handleCheckUser(lineUserId) {
-  const db = getSheetData(SHEET_EMPLOY_DB); // A:LineID, B:Name, C:SiteID, D:Role, E:Shift
+function handleLogin(username, password) {
+  // DB Columns: A:Username, B:Password, C:Name, D:SiteID, E:Role, F:Shift
+  const db = getSheetData(SHEET_EMPLOY_DB); 
   
-  const userRow = db.find(row => String(row[0]) === String(lineUserId));
+  // Find user matching username AND password
+  // Note: For demo, checking plain text. In production, consider hashing.
+  const userRow = db.find(row => String(row[0]) === String(username) && String(row[1]) === String(password));
   
   if (!userRow) {
-    return { success: false, message: "User not found" };
+    return { success: false, message: "Invalid username or password" };
   }
   
   return {
     success: true,
     user: {
-      lineUserId: userRow[0],
-      name: userRow[1],
-      siteId: userRow[2],
-      role: userRow[3],
-      shiftGroup: userRow[4]
+      username: userRow[0],
+      name: userRow[2], // Col C
+      siteId: userRow[3], // Col D
+      role: userRow[4], // Col E
+      shiftGroup: userRow[5] // Col F
     }
   };
 }
 
 function handleClockIn(data) {
-  const { lineUserId, latitude, longitude } = data;
+  const { username, latitude, longitude } = data;
   
   const db = getSheetData(SHEET_EMPLOY_DB);
-  const userRow = db.find(row => String(row[0]) === String(lineUserId));
+  const userRow = db.find(row => String(row[0]) === String(username));
   
   if (!userRow) return { success: false, message: "User not found" };
   
   const user = {
-    lineUserId: userRow[0],
-    name: userRow[1],
-    siteId: userRow[2],
-    role: userRow[3]
+    username: userRow[0],
+    name: userRow[2],
+    siteId: userRow[3],
+    role: userRow[4]
   };
   
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
@@ -78,10 +81,10 @@ function handleClockIn(data) {
   // Check Duplicate
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
-  // Logs: A:Date, B:LineID, C:Name, D:InTime, ...
+  // Logs: A:Date, B:Username, C:Name, D:InTime, ...
   
   const existingLog = logs.find(row => 
-    formatDate(row[0]) === today && String(row[1]) === user.lineUserId
+    formatDate(row[0]) === today && String(row[1]) === user.username
   );
   
   if (existingLog && existingLog[3] !== "") { 
@@ -107,7 +110,7 @@ function handleClockIn(data) {
   
   logsSheet.appendRow([
     today,
-    user.lineUserId,
+    user.username,
     user.name,
     timestamp,
     latitude,
@@ -123,13 +126,13 @@ function handleClockIn(data) {
 }
 
 function handleClockOut(data) {
-  const { lineUserId, latitude, longitude } = data;
+  const { username, latitude, longitude } = data;
   
   const db = getSheetData(SHEET_EMPLOY_DB);
-  const userRow = db.find(row => String(row[0]) === String(lineUserId));
+  const userRow = db.find(row => String(row[0]) === String(username));
   if (!userRow) return { success: false, message: "User not found" };
   
-  const user = { lineUserId: userRow[0], role: userRow[3], siteId: userRow[2] };
+  const user = { username: userRow[0], role: userRow[4], siteId: userRow[3] };
   const today = new Date().toISOString().split('T')[0];
   
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
@@ -137,7 +140,7 @@ function handleClockOut(data) {
   
   let rowIndex = -1;
   for (let i = 0; i < logs.length; i++) {
-    if (formatDate(logs[i][0]) === today && String(logs[i][1]) === user.lineUserId) {
+    if (formatDate(logs[i][0]) === today && String(logs[i][1]) === user.username) {
       rowIndex = i + 1; 
       break;
     }
@@ -147,7 +150,7 @@ function handleClockOut(data) {
     return { success: false, message: "Please Clock In first." };
   }
   
-  const outTimeCol = 7; 
+  const outTimeCol = 7; // Col G
   if (logsSheet.getRange(rowIndex, outTimeCol).getValue() !== "") {
     return { success: false, message: "Already clocked out today." };
   }
@@ -167,7 +170,7 @@ function handleClockOut(data) {
   const timestamp = new Date();
   const timeStr = timestamp.toLocaleTimeString('th-TH', { hour12: false });
   
-  const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue(); 
+  const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue(); // Col D is InTime
   let hoursWorked = 0;
   
   if (inTimeVal) {
@@ -240,7 +243,8 @@ function setup() {
     }
   }
   
-  createIfMissing(SHEET_EMPLOY_DB, ["Line_User_ID", "Name", "Site_ID", "Role_Type", "Shift_Group"]);
-  createIfMissing(SHEET_LOGS, ["Date", "Line_User_ID", "Name", "Clock_In_Time", "Clock_In_Lat", "Clock_In_Lng", "Clock_Out_Time", "Clock_Out_Lat", "Clock_Out_Lng", "Site_ID", "Working_Hours"]);
+  // NEW STRUCTURE
+  createIfMissing(SHEET_EMPLOY_DB, ["Username", "Password", "Name", "Site_ID", "Role_Type", "Shift_Group"]);
+  createIfMissing(SHEET_LOGS, ["Date", "Username", "Name", "Clock_In_Time", "Clock_In_Lat", "Clock_In_Lng", "Clock_Out_Time", "Clock_Out_Lat", "Clock_Out_Lng", "Site_ID", "Working_Hours"]);
   createIfMissing(SHEET_SITE_CONFIG, ["Site_ID", "Site_Name", "Latitude", "Longitude", "Radius_Allowed"]);
 }

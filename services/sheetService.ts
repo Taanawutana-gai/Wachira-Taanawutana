@@ -3,26 +3,27 @@ import { GeoLocationData, LogType, ApiResponse } from '../types';
 // Hardcoded URL from Work Instruction
 const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby_3_9XdI6EKiG2otT9pRPrUAzo77t1ftN8Lw3p3eALrDS_efVCs7A7_zt87tFLqhIf/exec';
 
-export const checkUserStatus = async (lineUserId: string): Promise<ApiResponse> => {
+export const loginUser = async (username: string, password: string): Promise<ApiResponse> => {
   try {
     const response = await fetch(SCRIPT_URL, {
       method: 'POST',
       mode: 'cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
-        action: 'CHECK_USER',
-        lineUserId: lineUserId
+        action: 'LOGIN_USER',
+        username: username,
+        password: password
       })
     });
     return await response.json();
   } catch (error) {
-    console.error("Check Status Error:", error);
+    console.error("Login Error:", error);
     return { success: false, message: "Connection failed" };
   }
 };
 
 export const sendClockAction = async (
-  lineUserId: string, 
+  username: string, 
   type: LogType, 
   location: GeoLocationData
 ): Promise<ApiResponse> => {
@@ -33,7 +34,7 @@ export const sendClockAction = async (
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: type, // CLOCK_IN or CLOCK_OUT
-        lineUserId: lineUserId,
+        username: username,
         latitude: location.latitude,
         longitude: location.longitude,
         accuracy: location.accuracy

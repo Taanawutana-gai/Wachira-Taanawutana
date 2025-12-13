@@ -1,5 +1,5 @@
 export interface User {
-  lineUserId: string;
+  username: string;
   name: string;
   siteId: string;
   role: 'Fixed' | 'Roaming';
