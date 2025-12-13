@@ -10,10 +10,20 @@ const SHEET_EMPLOY_DB = "Employ_DB";
 const SHEET_LOGS = "Logs";
 const SHEET_SITE_CONFIG = "Site_Config";
 
+// Handle GET requests to verify the script is running
+function doGet(e) {
+  return ContentService.createTextOutput("GeoClock AI Backend is Running. Use POST requests to interact.");
+}
+
 function doPost(e) {
   const output = { success: false, message: "Unknown Error" };
   
   try {
+    if (!e.postData || !e.postData.contents) {
+      output.message = "No data received";
+      return sendJSON(output);
+    }
+
     const data = JSON.parse(e.postData.contents);
     
     if (data.action === "LOGIN_USER") {
@@ -28,22 +38,24 @@ function doPost(e) {
       return sendJSON(handleClockOut(data));
     }
     
-    output.message = "Invalid Action";
+    output.message = "Invalid Action: " + data.action;
     return sendJSON(output);
 
   } catch (error) {
-    output.message = error.toString();
+    output.message = "Server Exception: " + error.toString();
     return sendJSON(output);
   }
 }
 
 function handleLogin(username, password) {
-  // DB Columns: A:Username, B:Password, C:Name, D:SiteID, E:Role, F:Shift
   const db = getSheetData(SHEET_EMPLOY_DB); 
   
+  if (db.length === 0) {
+    return { success: false, message: "Database is empty. Please add users." };
+  }
+
   // Find user matching username AND password
-  // Note: For demo, checking plain text. In production, consider hashing.
-  const userRow = db.find(row => String(row[0]) === String(username) && String(row[1]) === String(password));
+  const userRow = db.find(row => String(row[0]).trim() === String(username).trim() && String(row[1]).trim() === String(password).trim());
   
   if (!userRow) {
     return { success: false, message: "Invalid username or password" };
@@ -53,10 +65,10 @@ function handleLogin(username, password) {
     success: true,
     user: {
       username: userRow[0],
-      name: userRow[2], // Col C
-      siteId: userRow[3], // Col D
-      role: userRow[4], // Col E
-      shiftGroup: userRow[5] // Col F
+      name: userRow[2],
+      siteId: userRow[3],
+      role: userRow[4],
+      shiftGroup: userRow[5]
     }
   };
 }
@@ -81,7 +93,7 @@ function handleClockIn(data) {
   // Check Duplicate
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
-  // Logs: A:Date, B:Username, C:Name, D:InTime, ...
+  logs.shift(); // IMPORTANT: Remove Header Row to prevent "Invalid time value" error
   
   const existingLog = logs.find(row => 
     formatDate(row[0]) === today && String(row[1]) === user.username
@@ -93,12 +105,12 @@ function handleClockIn(data) {
 
   // Logic based on Role
   if (user.role === 'Fixed') {
-    const siteConfig = getSheetData(SHEET_SITE_CONFIG); // A:ID, B:Name, C:Lat, D:Lng, E:Radius
+    const siteConfig = getSheetData(SHEET_SITE_CONFIG);
     const site = siteConfig.find(row => String(row[0]) === user.siteId);
     
     if (!site) return { success: false, message: "Site configuration not found." };
     
-    const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000; // Meters
+    const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000;
     const radius = site[4] || 200;
     
     if (distance > radius) {
@@ -137,11 +149,14 @@ function handleClockOut(data) {
   
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
+  logs.shift(); // Remove Header Row
   
   let rowIndex = -1;
+  // Note: logs array is 0-indexed, but logsSheet rows are 1-indexed.
+  // logs[i] corresponds to row (i + 2) because we shifted headers.
   for (let i = 0; i < logs.length; i++) {
     if (formatDate(logs[i][0]) === today && String(logs[i][1]) === user.username) {
-      rowIndex = i + 1; 
+      rowIndex = i + 2; 
       break;
     }
   }
@@ -205,15 +220,29 @@ function sendJSON(content) {
 function formatDate(dateObj) {
   if (!dateObj) return "";
   const d = new Date(dateObj);
+  // Guard against Invalid Date
+  if (isNaN(d.getTime())) return ""; 
   return d.toISOString().split('T')[0];
 }
 
-function parseTime(timeStr) {
-  if (!timeStr) return null;
-  const d = new Date();
-  const [h, m, s] = timeStr.split(':');
-  d.setHours(h, m, s || 0);
-  return d;
+function parseTime(timeVal) {
+  if (!timeVal) return null;
+  
+  // If Sheets returns a Date object directly
+  if (timeVal instanceof Date) {
+    return timeVal;
+  }
+  
+  // If it's a string like "14:30:00"
+  if (typeof timeVal === 'string') {
+    const d = new Date();
+    const parts = timeVal.split(':');
+    if (parts.length < 2) return null;
+    d.setHours(parts[0], parts[1], parts[2] || 0);
+    return d;
+  }
+  
+  return null;
 }
 
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {

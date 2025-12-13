@@ -1,7 +1,7 @@
 import { GeoLocationData, LogType, ApiResponse } from '../types';
 
-// Hardcoded URL from Work Instruction
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzRLM_RwhNSt7jhndPmcCFOTMMFgsd0H1jU-F5oqAOKWFEoQAN6HlesUtc4hQKHhxmTxA/exec';
+// TODO: UPDATE THIS URL AFTER "NEW DEPLOYMENT"
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwfho3Gct3wnwG-kHKbY1tJ0BlI1gBXzX3M5Emmi6qO29-5my746jGIgmUGg2WYZe1Ebw/exec';
 
 export const loginUser = async (username: string, password: string): Promise<ApiResponse> => {
   try {
@@ -15,10 +15,22 @@ export const loginUser = async (username: string, password: string): Promise<Api
         password: password
       })
     });
-    return await response.json();
+
+    const text = await response.text();
+    
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      console.error("Invalid JSON response:", text);
+      return { 
+        success: false, 
+        message: "Server Error: Script configuration mismatch. Please check Script URL and Deployment." 
+      };
+    }
+
   } catch (error) {
     console.error("Login Error:", error);
-    return { success: false, message: "Connection failed" };
+    return { success: false, message: "Connection failed. Please check internet." };
   }
 };
 
@@ -40,7 +52,14 @@ export const sendClockAction = async (
         accuracy: location.accuracy
       })
     });
-    return await response.json();
+    
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch (e) {
+      return { success: false, message: "Server Error: Invalid response." };
+    }
+
   } catch (error) {
     console.error("Clock Action Error:", error);
     return { success: false, message: "Network error during clocking." };
