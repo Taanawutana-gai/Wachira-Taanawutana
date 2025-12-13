@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { User, LogType, GeoLocationData } from './types';
 import { loginUser, sendClockAction } from './services/sheetService';
 import { Button } from './components/Button';
@@ -16,6 +16,35 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [lineUserId, setLineUserId] = useState<string>("");
+
+  // --- Effects ---
+  useEffect(() => {
+    const initLiff = async () => {
+      try {
+        // @ts-ignore
+        const liff = window.liff;
+        if (liff) {
+          await liff.init({ liffId: '2007509057-QWw2WLrq' });
+          if (liff.isLoggedIn()) {
+            const profile = await liff.getProfile();
+            setLineUserId(profile.userId);
+          }
+        }
+      } catch (err) {
+        console.error("LIFF Initialization failed", err);
+      }
+    };
+    initLiff();
+  }, []);
+
+  const handleLiffLogin = () => {
+    // @ts-ignore
+    if (window.liff) {
+      // @ts-ignore
+      window.liff.login();
+    }
+  };
 
   // --- Handlers ---
 
@@ -257,6 +286,22 @@ const App: React.FC = () => {
                     <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
                         <span className="text-slate-400">Shift</span>
                         <span className="font-medium text-slate-700">{user.shiftGroup || '-'}</span>
+                    </div>
+                    <div className="flex justify-between items-center text-sm border-b border-slate-100 pb-2">
+                        <span className="text-slate-400">LINE ID</span>
+                        <div className="flex items-center gap-2">
+                            <span className="font-medium text-slate-700 text-xs truncate max-w-[120px]" title={lineUserId || "Not connected"}>
+                                {lineUserId || 'Not connected'}
+                            </span>
+                            {!lineUserId && (
+                                <button 
+                                    onClick={handleLiffLogin}
+                                    className="text-[10px] bg-[#06C755] hover:bg-[#05b34c] text-white px-2 py-0.5 rounded shadow-sm"
+                                >
+                                    Connect
+                                </button>
+                            )}
+                        </div>
                     </div>
                 </div>
 
