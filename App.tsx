@@ -1,10 +1,10 @@
 import * as React from 'react';
 import { useState, useEffect } from 'react';
-import { User, LogType, AttendanceLog, GeoLocationData } from './types';
+import { User, LogType, GeoLocationData } from './types';
 import { checkUserStatus, sendClockAction } from './services/sheetService';
 import { Button } from './components/Button';
 
-// LIFF ID from WI
+// LIFF ID from previous context
 const LIFF_ID = "2007509057-QWw2WLrq";
 
 declare global {
@@ -39,7 +39,7 @@ const App: React.FC = () => {
         }
 
         const profile = await window.liff.getProfile();
-        // Store raw LIFF profile immediately so we can show ID even if not registered
+        // Store raw LIFF profile immediately
         setLiffProfile({ 
             userId: profile.userId, 
             displayName: profile.displayName, 
@@ -50,10 +50,8 @@ const App: React.FC = () => {
 
       } catch (err: any) {
         console.error("LIFF Init Error:", err);
-        // Fallback for development/browser testing without LIFF
         setStatusMessage("LIFF Error. Using dev mode?");
-        // Uncomment below to force a mock user in dev
-        // verifyUser("U123456789MockID", "https://via.placeholder.com/150");
+        // Dev fallback if needed
         setError("Please open this in LINE.");
         setIsLoading(false);
       }
@@ -74,7 +72,7 @@ const App: React.FC = () => {
         });
         setError(null);
       } else {
-        // Don't set user, but keep liffProfile
+        // User not found in DB
         setError(response.message || "User not registered.");
       }
     } catch (e) {
@@ -103,10 +101,6 @@ const App: React.FC = () => {
           longitude: position.coords.longitude,
           accuracy: position.coords.accuracy,
         };
-
-        if (location.accuracy > 1000) {
-           // Warning logic if needed
-        }
 
         const result = await sendClockAction(user.lineUserId, type, location);
 

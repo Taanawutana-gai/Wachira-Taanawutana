@@ -7,7 +7,7 @@ export const checkUserStatus = async (lineUserId: string): Promise<ApiResponse> 
   try {
     const response = await fetch(SCRIPT_URL, {
       method: 'POST',
-      mode: 'cors', // Ensure Script is deployed with "Anyone" access
+      mode: 'cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: 'CHECK_USER',
@@ -16,7 +16,7 @@ export const checkUserStatus = async (lineUserId: string): Promise<ApiResponse> 
     });
     return await response.json();
   } catch (error) {
-    console.error("Check User Error:", error);
+    console.error("Check Status Error:", error);
     return { success: false, message: "Connection failed" };
   }
 };

@@ -1,8 +1,8 @@
 /**
- * GEO CLOCK AI - BACKEND (Work Instruction Compliant)
+ * GEO CLOCK AI - BACKEND (LINE ID Version)
  * 
  * SETUP:
- * 1. Create Sheets: "Employ_DB", "Logs", "Site_Config", "Shift_Table"
+ * 1. Create Sheets: "Employ_DB", "Logs", "Site_Config"
  * 2. Deploy as Web App -> Execute as: Me -> Who has access: Anyone
  */
 
@@ -39,10 +39,11 @@ function doPost(e) {
 
 function handleCheckUser(lineUserId) {
   const db = getSheetData(SHEET_EMPLOY_DB); // A:LineID, B:Name, C:SiteID, D:Role, E:Shift
+  
   const userRow = db.find(row => String(row[0]) === String(lineUserId));
   
   if (!userRow) {
-    return { success: false, message: "User not registered in Employ_DB" };
+    return { success: false, message: "User not found" };
   }
   
   return {
@@ -60,28 +61,34 @@ function handleCheckUser(lineUserId) {
 function handleClockIn(data) {
   const { lineUserId, latitude, longitude } = data;
   
-  // 1. Validate User
-  const userCheck = handleCheckUser(lineUserId);
-  if (!userCheck.success) return userCheck;
-  const user = userCheck.user;
+  const db = getSheetData(SHEET_EMPLOY_DB);
+  const userRow = db.find(row => String(row[0]) === String(lineUserId));
+  
+  if (!userRow) return { success: false, message: "User not found" };
+  
+  const user = {
+    lineUserId: userRow[0],
+    name: userRow[1],
+    siteId: userRow[2],
+    role: userRow[3]
+  };
   
   const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
   
-  // 2. Check Duplicate Clock In
+  // Check Duplicate
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
-  // Logs: A:Date, B:Name, C:InTime, D:InLat, E:InLng, F:OutTime, G:OutLat, H:OutLng, I:SiteID
+  // Logs: A:Date, B:LineID, C:Name, D:InTime, ...
   
-  // Check if user already has a row for TODAY with this name
   const existingLog = logs.find(row => 
-    formatDate(row[0]) === today && String(row[1]) === user.name
+    formatDate(row[0]) === today && String(row[1]) === user.lineUserId
   );
   
-  if (existingLog && existingLog[2] !== "") {
+  if (existingLog && existingLog[3] !== "") { 
     return { success: false, message: "Already clocked in today." };
   }
 
-  // 3. Logic based on Role
+  // Logic based on Role
   if (user.role === 'Fixed') {
     const siteConfig = getSheetData(SHEET_SITE_CONFIG); // A:ID, B:Name, C:Lat, D:Lng, E:Radius
     const site = siteConfig.find(row => String(row[0]) === user.siteId);
@@ -96,11 +103,11 @@ function handleClockIn(data) {
     }
   }
   
-  // 4. Record Clock In
   const timestamp = new Date().toLocaleTimeString('th-TH', { hour12: false });
   
   logsSheet.appendRow([
     today,
+    user.lineUserId,
     user.name,
     timestamp,
     latitude,
@@ -118,19 +125,20 @@ function handleClockIn(data) {
 function handleClockOut(data) {
   const { lineUserId, latitude, longitude } = data;
   
-  const userCheck = handleCheckUser(lineUserId);
-  if (!userCheck.success) return userCheck;
-  const user = userCheck.user;
+  const db = getSheetData(SHEET_EMPLOY_DB);
+  const userRow = db.find(row => String(row[0]) === String(lineUserId));
+  if (!userRow) return { success: false, message: "User not found" };
+  
+  const user = { lineUserId: userRow[0], role: userRow[3], siteId: userRow[2] };
   const today = new Date().toISOString().split('T')[0];
   
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
   
-  // Find the row index
   let rowIndex = -1;
   for (let i = 0; i < logs.length; i++) {
-    if (formatDate(logs[i][0]) === today && String(logs[i][1]) === user.name) {
-      rowIndex = i + 1; // 1-based index
+    if (formatDate(logs[i][0]) === today && String(logs[i][1]) === user.lineUserId) {
+      rowIndex = i + 1; 
       break;
     }
   }
@@ -139,13 +147,11 @@ function handleClockOut(data) {
     return { success: false, message: "Please Clock In first." };
   }
   
-  // Check if already clocked out
-  const outTimeCol = 6; // Column F
+  const outTimeCol = 7; 
   if (logsSheet.getRange(rowIndex, outTimeCol).getValue() !== "") {
     return { success: false, message: "Already clocked out today." };
   }
   
-  // Role Check (Fixed needs to be near site to clock out? WI says yes for Fixed)
   if (user.role === 'Fixed') {
     const siteConfig = getSheetData(SHEET_SITE_CONFIG);
     const site = siteConfig.find(row => String(row[0]) === user.siteId);
@@ -161,37 +167,31 @@ function handleClockOut(data) {
   const timestamp = new Date();
   const timeStr = timestamp.toLocaleTimeString('th-TH', { hour12: false });
   
-  // Calculate Working Hours
-  // Get Clock In Time from sheet
-  const inTimeVal = logsSheet.getRange(rowIndex, 3).getValue(); // Col C
+  const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue(); 
   let hoursWorked = 0;
   
   if (inTimeVal) {
-    // Parse times (Assuming HH:mm:ss format strings)
     const d1 = parseTime(inTimeVal);
     const d2 = parseTime(timeStr);
-    
     if (d1 && d2) {
       const diffMs = d2 - d1;
-      hoursWorked = (diffMs / (1000 * 60 * 60)).toFixed(2); // e.g. 8.50
+      hoursWorked = (diffMs / (1000 * 60 * 60)).toFixed(2); 
     }
   }
   
-  // Update Row: OutTime(F), OutLat(G), OutLng(H), Site(I - existing), Hours(J)
-  logsSheet.getRange(rowIndex, 6).setValue(timeStr);
-  logsSheet.getRange(rowIndex, 7).setValue(latitude);
-  logsSheet.getRange(rowIndex, 8).setValue(longitude);
-  logsSheet.getRange(rowIndex, 10).setValue(hoursWorked);
+  logsSheet.getRange(rowIndex, 7).setValue(timeStr);
+  logsSheet.getRange(rowIndex, 8).setValue(latitude);
+  logsSheet.getRange(rowIndex, 9).setValue(longitude);
+  logsSheet.getRange(rowIndex, 11).setValue(hoursWorked);
   
   return { success: true, message: `Clock Out Successful. Hours: ${hoursWorked}` };
 }
 
-// Utils
 function getSheetData(name) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
   if (!sheet) return [];
   const data = sheet.getDataRange().getValues();
-  data.shift(); // Remove header
+  data.shift(); 
   return data;
 }
 
@@ -214,16 +214,15 @@ function parseTime(timeStr) {
 }
 
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  var R = 6371; // Radius of the earth in km
-  var dLat = deg2rad(lat2-lat1);  // deg2rad below
+  var R = 6371; 
+  var dLat = deg2rad(lat2-lat1);  
   var dLon = deg2rad(lon2-lon1); 
   var a = 
     Math.sin(dLat/2) * Math.sin(dLat/2) +
     Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2)
-    ; 
+    Math.sin(dLon/2) * Math.sin(dLon/2); 
   var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  var d = R * c; // Distance in km
+  var d = R * c; 
   return d;
 }
 
@@ -242,6 +241,6 @@ function setup() {
   }
   
   createIfMissing(SHEET_EMPLOY_DB, ["Line_User_ID", "Name", "Site_ID", "Role_Type", "Shift_Group"]);
-  createIfMissing(SHEET_LOGS, ["Date", "Name", "Clock_In_Time", "Clock_In_Lat", "Clock_In_Lng", "Clock_Out_Time", "Clock_Out_Lat", "Clock_Out_Lng", "Site_ID", "Working_Hours"]);
+  createIfMissing(SHEET_LOGS, ["Date", "Line_User_ID", "Name", "Clock_In_Time", "Clock_In_Lat", "Clock_In_Lng", "Clock_Out_Time", "Clock_Out_Lat", "Clock_Out_Lng", "Site_ID", "Working_Hours"]);
   createIfMissing(SHEET_SITE_CONFIG, ["Site_ID", "Site_Name", "Latitude", "Longitude", "Radius_Allowed"]);
 }
