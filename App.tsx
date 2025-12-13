@@ -15,7 +15,11 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  
+  // Modals
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isLineModalOpen, setIsLineModalOpen] = useState(false); // For Login Screen
+  
   const [lineUserId, setLineUserId] = useState<string>("");
 
   // --- Effects ---
@@ -124,7 +128,18 @@ const App: React.FC = () => {
   // --- UI Components ---
 
   const LoginScreen = () => (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 relative">
+       {/* Login Header Icon */}
+       <div className="absolute top-0 right-0 p-6">
+          <button
+            onClick={() => setIsLineModalOpen(true)}
+            className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center text-slate-400 hover:text-blue-600 transition-colors border border-slate-100"
+            title="Check LINE ID"
+          >
+            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
+          </button>
+       </div>
+
        <div className="w-full max-w-sm bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50">
           <div className="text-center mb-8">
             <h1 className="text-3xl font-bold text-slate-800 mb-2">GeoClock AI</h1>
@@ -172,6 +187,45 @@ const App: React.FC = () => {
             </Button>
           </form>
        </div>
+
+       {/* Line ID Modal for Login Screen */}
+       {isLineModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl shadow-2xl max-w-xs w-full p-6 animate-in zoom-in-95">
+                <div className="text-center mb-6">
+                    <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
+                    </div>
+                    <h3 className="text-lg font-bold text-slate-800">User Identification</h3>
+                    <p className="text-slate-400 text-xs mt-1">Check your LINE ID for registration</p>
+                </div>
+
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 text-center">
+                    <p className="text-xs font-bold text-slate-400 uppercase tracking-wide mb-2">My LINE User ID</p>
+                    <div className="relative group">
+                        <code className="block font-mono text-sm text-slate-700 break-all bg-white p-3 rounded-lg border border-slate-200 select-all">
+                            {lineUserId || "Not Connected"}
+                        </code>
+                    </div>
+                </div>
+
+                <div className="space-y-3">
+                     {!lineUserId && (
+                        <Button 
+                            fullWidth 
+                            onClick={handleLiffLogin}
+                            className="bg-[#06C755] hover:bg-[#05b34c] text-white"
+                        >
+                            Connect LINE
+                        </Button>
+                     )}
+                    <Button variant="outline" fullWidth onClick={() => setIsLineModalOpen(false)}>
+                        Close
+                    </Button>
+                </div>
+            </div>
+        </div>
+       )}
     </div>
   );
 
