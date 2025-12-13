@@ -111,6 +111,7 @@ function handleClockIn(data) {
     return { success: false, message: "Already clocked in today." };
   }
 
+  // --- DISTANCE CHECK FOR CLOCK IN ---
   if (user.role === 'Fixed') {
     const siteConfig = getSheetData(SHEET_SITE_CONFIG);
     const site = siteConfig.find(row => String(row[0]) === user.siteId);
@@ -118,7 +119,7 @@ function handleClockIn(data) {
     if (!site) return { success: false, message: "Site configuration not found." };
     
     const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000;
-    const radius = site[4] || 200;
+    const radius = site[4] || 200; // Default 200m if not set
     
     if (distance > radius) {
       return { success: false, message: `Out of range! You are ${Math.round(distance)}m away from site (Max ${radius}m).` };
@@ -183,15 +184,19 @@ function handleClockOut(data) {
     return { success: false, message: "Already clocked out today." };
   }
   
+  // --- DISTANCE CHECK FOR CLOCK OUT ---
   if (user.role === 'Fixed') {
     const siteConfig = getSheetData(SHEET_SITE_CONFIG);
     const site = siteConfig.find(row => String(row[0]) === user.siteId);
-    if (site) {
-       const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000;
-       const radius = site[4] || 200;
-       if (distance > radius) {
-         return { success: false, message: `Cannot Clock Out. You are ${Math.round(distance)}m away from site.` };
-       }
+    
+    // Strict check: Site must exist
+    if (!site) return { success: false, message: "Site configuration not found." };
+    
+    const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000;
+    const radius = site[4] || 200; // Default 200m if not set
+    
+    if (distance > radius) {
+       return { success: false, message: `Cannot Clock Out. You are ${Math.round(distance)}m away from site (Max ${radius}m).` };
     }
   }
   
