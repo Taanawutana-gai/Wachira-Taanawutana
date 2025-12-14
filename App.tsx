@@ -173,7 +173,7 @@ const App: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Password</label>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Staff ID</label>
                 <input 
                   type="password" 
                   value={passwordInput}
