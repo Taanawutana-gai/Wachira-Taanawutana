@@ -1,5 +1,6 @@
+
 /**
- * GEO CLOCK AI - BACKEND (Username/Password Version)
+ * GEO CLOCK AI - BACKEND (Staff ID Logging Version)
  * 
  * SETUP:
  * 1. Create Sheets: "Employ_DB", "Logs", "Site_Config", "Shift_Table"
@@ -11,11 +12,10 @@ const SHEET_LOGS = "Logs";
 const SHEET_SITE_CONFIG = "Site_Config";
 const SHEET_SHIFT_TABLE = "Shift_Table"; 
 
-const TIMEZONE = "Asia/Bangkok"; // Force Thai Timezone
+const TIMEZONE = "Asia/Bangkok"; 
 
-// Handle GET requests to verify the script is running
 function doGet(e) {
-  return ContentService.createTextOutput("GeoClock AI Backend is Running. Use POST requests to interact.");
+  return ContentService.createTextOutput("GeoClock AI Backend is Running. Staff ID logging enabled.");
 }
 
 function doPost(e) {
@@ -52,22 +52,17 @@ function doPost(e) {
 
 function handleLogin(username, password) {
   const db = getSheetData(SHEET_EMPLOY_DB); 
-  
-  if (db.length === 0) {
-    return { success: false, message: "Database is empty. Please add users." };
-  }
+  if (db.length === 0) return { success: false, message: "Database is empty." };
 
   const userRow = db.find(row => String(row[0]).trim() === String(username).trim() && String(row[1]).trim() === String(password).trim());
   
-  if (!userRow) {
-    return { success: false, message: "Invalid username or password" };
-  }
+  if (!userRow) return { success: false, message: "Invalid username or password" };
   
   return {
     success: true,
     user: {
-      username: userRow[0],
-      password: userRow[1], // Include Password (Col B) in response
+      username: userRow[0], // LINE ID
+      password: userRow[1], // Staff ID
       name: userRow[2],
       siteId: userRow[3],
       role: userRow[4],
@@ -79,69 +74,49 @@ function handleLogin(username, password) {
 function handleClockIn(data) {
   const { username, latitude, longitude, accuracy } = data;
   
-  // Spec Section 7: GPS Accuracy Check
   if (accuracy && accuracy > 200) {
-    return { success: false, message: `GPS signal too weak (Accuracy: ${Math.round(accuracy)}m). Please move outdoors.` };
+    return { success: false, message: `GPS signal too weak (${Math.round(accuracy)}m).` };
   }
 
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
-  
   if (!userRow) return { success: false, message: "User not found" };
   
-  const user = {
-    username: userRow[0],
-    name: userRow[2],
-    siteId: userRow[3],
-    role: userRow[4]
-  };
+  const staffId = String(userRow[1]); // Get Staff ID from Column B
+  const name = userRow[2];
+  const role = userRow[4];
+  const siteId = userRow[3];
   
-  // Fix: Use Thai Timezone for Date String
   const todayStr = getThaiDateString(new Date());
-  
-  const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
-  const logs = logsSheet.getDataRange().getValues();
-  logs.shift(); // Remove Header
-  
-  // Check Duplicate using Thai Date
-  const existingLog = logs.find(row => 
-    getThaiDateString(row[0]) === todayStr && String(row[1]) === user.username
-  );
-  
-  if (existingLog && existingLog[3] !== "") { 
-    return { success: false, message: "Already clocked in today." };
-  }
 
-  // --- DISTANCE CHECK FOR CLOCK IN ---
-  if (user.role === 'Fixed') {
+  if (role === 'Fixed') {
     const siteConfig = getSheetData(SHEET_SITE_CONFIG);
-    const site = siteConfig.find(row => String(row[0]) === user.siteId);
-    
+    const site = siteConfig.find(row => String(row[0]) === siteId);
     if (!site) return { success: false, message: "Site configuration not found." };
     
     const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000;
-    const radius = site[4] || 200; // Default 200m if not set
+    const radius = site[4] || 200;
     
     if (distance > radius) {
-      return { success: false, message: `Out of range! You are ${Math.round(distance)}m away from site (Max ${radius}m).` };
+      return { success: false, message: `Out of range! Distance: ${Math.round(distance)}m.` };
     }
   }
   
-  // Time in HH:mm:ss format (Thai Time)
   const timestamp = Utilities.formatDate(new Date(), TIMEZONE, "HH:mm:ss");
+  const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   
   logsSheet.appendRow([
-    todayStr, // Store YYYY-MM-DD string to avoid timezone confusion in sheet cells
-    user.username,
-    user.name,
+    todayStr,
+    staffId, // RECORD STAFF ID INSTEAD OF LINE ID
+    name,
     timestamp,
     latitude,
     longitude,
-    "", 
-    "", 
-    "", 
-    user.siteId,
-    "" 
+    "", // Clock Out Time
+    "", // Out Lat
+    "", // Out Lng
+    siteId,
+    "" // Working Hours
   ]);
   
   return { success: true, message: `Clock In Successful at ${timestamp}` };
@@ -151,77 +126,62 @@ function handleClockOut(data) {
   const { username, latitude, longitude, accuracy } = data;
 
   if (accuracy && accuracy > 200) {
-    return { success: false, message: `GPS signal too weak (Accuracy: ${Math.round(accuracy)}m). Please move outdoors.` };
+    return { success: false, message: `GPS signal too weak.` };
   }
   
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
   if (!userRow) return { success: false, message: "User not found" };
   
-  const user = { username: userRow[0], role: userRow[4], siteId: userRow[3] };
-  
-  // Fix: Use Thai Timezone
-  const todayStr = getThaiDateString(new Date());
+  const staffId = String(userRow[1]); // Identify record by Staff ID
+  const role = userRow[4];
+  const siteId = userRow[3];
   
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
-  logs.shift(); // Remove Header
   
+  // Search for the latest open session for this STAFF ID
   let rowIndex = -1;
-  for (let i = 0; i < logs.length; i++) {
-    // Compare dates using strict Thai Timezone formatting
-    if (getThaiDateString(logs[i][0]) === todayStr && String(logs[i][1]) === user.username) {
-      rowIndex = i + 2; 
+  for (let i = logs.length - 1; i >= 1; i--) {
+    if (String(logs[i][1]) === staffId && String(logs[i][6]) === "") {
+      rowIndex = i + 1; 
       break;
     }
   }
   
   if (rowIndex === -1) {
-    return { success: false, message: "Please Clock In first." };
+    return { success: false, message: "No active session found. Please Clock In first." };
   }
   
-  const outTimeCol = 7; // Col G
-  if (logsSheet.getRange(rowIndex, outTimeCol).getValue() !== "") {
-    return { success: false, message: "Already clocked out today." };
-  }
-  
-  // --- DISTANCE CHECK FOR CLOCK OUT ---
-  if (user.role === 'Fixed') {
+  if (role === 'Fixed') {
     const siteConfig = getSheetData(SHEET_SITE_CONFIG);
-    const site = siteConfig.find(row => String(row[0]) === user.siteId);
-    
-    // Strict check: Site must exist
-    if (!site) return { success: false, message: "Site configuration not found." };
-    
-    const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000;
-    const radius = site[4] || 200; // Default 200m if not set
-    
-    if (distance > radius) {
-       return { success: false, message: `Cannot Clock Out. You are ${Math.round(distance)}m away from site (Max ${radius}m).` };
+    const site = siteConfig.find(row => String(row[0]) === siteId);
+    if (site) {
+      const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000;
+      const radius = site[4] || 200;
+      if (distance > radius) return { success: false, message: "Out of range for Clock Out." };
     }
   }
   
   const timestamp = new Date();
   const timeStr = Utilities.formatDate(timestamp, TIMEZONE, "HH:mm:ss");
   
-  // --- Working Hours Calculation (Column K) ---
-  const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue(); // Col D is InTime
+  // Calculate Hours
+  const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue();
   let hoursWorked = "";
-  
   if (inTimeVal) {
-    const d1 = parseTime(inTimeVal); // Clock In
-    const d2 = parseTime(timeStr);   // Clock Out
+    const d1 = parseTime(inTimeVal);
+    const d2 = parseTime(timeStr);
     if (d1 && d2) {
       const diffMs = d2.getTime() - d1.getTime();
-      // Convert ms to hours (decimal)
       hoursWorked = (diffMs / (1000 * 60 * 60)).toFixed(2); 
     }
   }
   
-  logsSheet.getRange(rowIndex, 7).setValue(timeStr);      // Clock Out Time
-  logsSheet.getRange(rowIndex, 8).setValue(latitude);     // Out Lat
-  logsSheet.getRange(rowIndex, 9).setValue(longitude);    // Out Lng
-  logsSheet.getRange(rowIndex, 11).setValue(hoursWorked); // Working Hours (Col K)
+  logsSheet.getRange(rowIndex, 7).setValue(timeStr);
+  logsSheet.getRange(rowIndex, 8).setValue(latitude);
+  logsSheet.getRange(rowIndex, 9).setValue(longitude);
+  logsSheet.getRange(rowIndex, 11).setValue(hoursWorked);
   
   return { success: true, message: `Clock Out Successful. Hours: ${hoursWorked}` };
 }
@@ -238,40 +198,24 @@ function sendJSON(content) {
   return ContentService.createTextOutput(JSON.stringify(content)).setMimeType(ContentService.MimeType.JSON);
 }
 
-// Helper: Get Date String in YYYY-MM-DD (Thai Time)
 function getThaiDateString(dateObj) {
   if (!dateObj) return "";
-  try {
-    const d = new Date(dateObj);
-    if (isNaN(d.getTime())) return "";
-    return Utilities.formatDate(d, TIMEZONE, "yyyy-MM-dd");
-  } catch (e) {
-    return "";
-  }
+  const d = new Date(dateObj);
+  return Utilities.formatDate(d, TIMEZONE, "yyyy-MM-dd");
 }
 
-// Robust time parser that normalizes date to Epoch (1970-01-01) for pure time comparison
 function parseTime(timeVal) {
   if (!timeVal) return null;
-  
   let date = new Date();
-  
-  // Case 1: Value is already a Date object (from formatted Google Sheet cell)
   if (timeVal instanceof Date) {
     date = new Date(timeVal.getTime());
-  } 
-  // Case 2: Value is string "HH:mm:ss"
-  else if (typeof timeVal === 'string') {
+  } else if (typeof timeVal === 'string') {
     const parts = timeVal.split(':');
-    if (parts.length < 2) return null;
     date.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), parseInt(parts[2] || 0, 10), 0);
   } else {
     return null;
   }
-  
-  // Normalize date part to 1970-01-01 to ignore date differences
   date.setFullYear(1970, 0, 1);
-  
   return date;
 }
 
@@ -279,31 +223,9 @@ function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
   var R = 6371; 
   var dLat = deg2rad(lat2-lat1);  
   var dLon = deg2rad(lon2-lon1); 
-  var a = 
-    Math.sin(dLat/2) * Math.sin(dLat/2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * 
-    Math.sin(dLon/2) * Math.sin(dLon/2); 
+  var a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2); 
   var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  var d = R * c; 
-  return d;
+  return R * c;
 }
 
-function deg2rad(deg) {
-  return deg * (Math.PI/180)
-}
-
-function setup() {
-  const ss = SpreadsheetApp.getActiveSpreadsheet();
-  const createIfMissing = (name, headers) => {
-    if (!ss.getSheetByName(name)) {
-      const s = ss.insertSheet(name);
-      s.appendRow(headers);
-      s.setFrozenRows(1);
-    }
-  }
-  
-  createIfMissing(SHEET_EMPLOY_DB, ["Username", "Password", "Name", "Site_ID", "Role_Type", "Shift_Group"]);
-  createIfMissing(SHEET_LOGS, ["Date", "Username", "Name", "Clock_In_Time", "Clock_In_Lat", "Clock_In_Lng", "Clock_Out_Time", "Clock_Out_Lat", "Clock_Out_Lng", "Site_ID", "Working_Hours"]);
-  createIfMissing(SHEET_SITE_CONFIG, ["Site_ID", "Site_Name", "Latitude", "Longitude", "Radius_Allowed"]);
-  createIfMissing(SHEET_SHIFT_TABLE, ["Shift_Group", "Shift_Name", "Start_Time", "End_Time", "Late_Time"]);
-}
+function deg2rad(deg) { return deg * (Math.PI/180); }
