@@ -147,8 +147,8 @@ const App: React.FC = () => {
                 <input type="text" value={usernameInput} readOnly className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 font-mono text-sm" placeholder="Connect LINE first" />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Staff ID (Password)</label>
-                <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 outline-none transition-all" placeholder="Enter password" />
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Staff ID</label>
+                <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 outline-none transition-all" placeholder="Enter Staff ID" />
               </div>
               {error && <div className="bg-red-50 p-3 rounded-lg flex items-center gap-2 border border-red-100 text-red-600 text-sm font-medium">{error}</div>}
               <Button type="submit" variant="primary" fullWidth isLoading={isLoading} disabled={!usernameInput} className="mt-4">Log In</Button>
