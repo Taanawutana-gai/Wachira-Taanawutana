@@ -1,6 +1,6 @@
 
 /**
- * GEO CLOCK AI - BACKEND (Overnight Calculation Support)
+ * GEO CLOCK AI - BACKEND (Stats & Overnight Support)
  * 
  * LOGS STRUCTURE:
  * A: Staff_ID, B: Name, C: Date_Clock_in, D: Clock_In_Time, E: In_Lat, F: In_Lng
@@ -13,7 +13,7 @@ const SHEET_SITE_CONFIG = "Site_Config";
 const TIMEZONE = "Asia/Bangkok"; 
 
 function doGet(e) {
-  return ContentService.createTextOutput("GeoClock AI Backend is Running. Overnight Support enabled.");
+  return ContentService.createTextOutput("GeoClock AI Backend is Running.");
 }
 
 function doPost(e) {
@@ -32,18 +32,43 @@ function doPost(e) {
   }
 }
 
+function getUserLogs(staffId) {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
+  if (!sheet) return [];
+  const data = sheet.getDataRange().getValues();
+  data.shift(); // Remove header
+  
+  // Filter for this user and get last 20 entries
+  return data
+    .filter(row => String(row[0]) === String(staffId))
+    .slice(-20)
+    .map(row => ({
+      staffId: row[0],
+      name: row[1],
+      dateIn: row[2] instanceof Date ? Utilities.formatDate(row[2], TIMEZONE, "yyyy-MM-dd") : row[2],
+      timeIn: row[3],
+      dateOut: row[6],
+      timeOut: row[7],
+      workingHours: row[11] || 0
+    }));
+}
+
 function handleLogin(username, password) {
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]).trim() === String(username).trim() && String(row[1]).trim() === String(password).trim());
+  
   if (!userRow) return { success: false, message: "Username หรือ Password ไม่ถูกต้อง" };
+  
+  const staffId = userRow[1];
   return {
     success: true,
-    user: { username: userRow[0], password: userRow[1], name: userRow[2], siteId: userRow[3], role: userRow[4], shiftGroup: userRow[5] }
+    user: { username: userRow[0], password: userRow[1], name: userRow[2], siteId: userRow[3], role: userRow[4], shiftGroup: userRow[5] },
+    logs: getUserLogs(staffId)
   };
 }
 
 function handleClockIn(data) {
-  const { username, latitude, longitude, accuracy } = data;
+  const { username, latitude, longitude } = data;
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
   if (!userRow) return { success: false, message: "ไม่พบข้อมูลพนักงาน" };
@@ -67,7 +92,12 @@ function handleClockIn(data) {
   
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   logsSheet.appendRow([staffId, name, dateStr, timeStr, latitude, longitude, "", "", "", "", siteId, ""]);
-  return { success: true, message: `บันทึกเข้างานสำเร็จ: ${timeStr}` };
+  
+  return { 
+    success: true, 
+    message: `บันทึกเข้างานสำเร็จ: ${timeStr}`,
+    logs: getUserLogs(staffId)
+  };
 }
 
 function handleClockOut(data) {
@@ -94,28 +124,21 @@ function handleClockOut(data) {
   const dateOutStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
   const timeOutStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
 
-  // Robust Calculation for Overnight Shifts
-  const inDateVal = logsSheet.getRange(rowIndex, 3).getValue(); // Col C
-  const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue(); // Col D
+  const inDateVal = logsSheet.getRange(rowIndex, 3).getValue();
+  const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue();
   
-  let hoursWorked = "0.00";
+  let hoursWorked = 0;
   try {
     let inDateTime = new Date(inDateVal);
-    // If inTimeVal is string "HH:mm:ss"
     if (typeof inTimeVal === 'string') {
       const t = inTimeVal.split(':');
       inDateTime.setHours(parseInt(t[0]), parseInt(t[1]), parseInt(t[2] || 0));
     } else if (inTimeVal instanceof Date) {
       inDateTime.setHours(inTimeVal.getHours(), inTimeVal.getMinutes(), inTimeVal.getSeconds());
     }
-    
     const diffMs = now.getTime() - inDateTime.getTime();
-    if (diffMs > 0) {
-      hoursWorked = (diffMs / (1000 * 60 * 60)).toFixed(2);
-    }
-  } catch (e) {
-    console.error("Calculation error", e);
-  }
+    if (diffMs > 0) hoursWorked = (diffMs / (1000 * 60 * 60)).toFixed(2);
+  } catch (e) {}
 
   logsSheet.getRange(rowIndex, 7).setValue(dateOutStr);
   logsSheet.getRange(rowIndex, 8).setValue(timeOutStr);
@@ -123,7 +146,11 @@ function handleClockOut(data) {
   logsSheet.getRange(rowIndex, 10).setValue(longitude);
   logsSheet.getRange(rowIndex, 12).setValue(hoursWorked);
   
-  return { success: true, message: `บันทึกออกงานสำเร็จ ชั่วโมงทำงาน: ${hoursWorked}` };
+  return { 
+    success: true, 
+    message: `บันทึกออกงานสำเร็จ ชั่วโมงทำงาน: ${hoursWorked}`,
+    logs: getUserLogs(staffId)
+  };
 }
 
 function getSheetData(name) {
