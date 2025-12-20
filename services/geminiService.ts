@@ -1,24 +1,25 @@
+
 import { GoogleGenAI } from "@google/genai";
 
-const apiKey = process.env.API_KEY || ''; // Fallback empty string if not set (logic should handle check)
+const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
 export const getDailyInsight = async (username: string, type: 'in' | 'out', timeStr: string): Promise<string> => {
-  if (!apiKey) return "Have a great day!";
+  if (!apiKey) return "ขอให้เป็นวันที่ดี!";
 
   try {
     const prompt = type === 'in'
-      ? `Generate a very short (max 15 words), punchy, motivational welcome message for ${username} who just clocked in at ${timeStr}. Focus on productivity or positivity.`
-      : `Generate a very short (max 15 words) relaxing farewell message for ${username} who just clocked out at ${timeStr}. Focus on rest or good job.`;
+      ? `สร้างข้อความต้อนรับสั้นๆ (ไม่เกิน 15 คำ) ให้คุณ ${username} ที่เพิ่งบันทึกเข้างานเวลา ${timeStr} เน้นพลังบวกและการทำงาน`
+      : `สร้างข้อความบอกลาพักผ่อนสั้นๆ (ไม่เกิน 15 คำ) ให้คุณ ${username} ที่เพิ่งบันทึกออกงานเวลา ${timeStr} เน้นความภูมิใจในงานและการพักผ่อน`;
 
     const response = await ai.models.generateContent({
-      model: 'gemini-2.5-flash',
+      model: 'gemini-3-flash-preview',
       contents: prompt,
     });
 
-    return response.text || (type === 'in' ? "Let's make today count!" : "Great work today!");
+    return response.text || (type === 'in' ? "ลุยกันเลยวันนี้!" : "พักผ่อนให้เต็มที่ครับ!");
   } catch (error) {
     console.error("Gemini API Error:", error);
-    return type === 'in' ? "Welcome back!" : "See you next time!";
+    return type === 'in' ? "ยินดีต้อนรับกลับมา!" : "ไว้พบกันใหม่ครับ!";
   }
 };

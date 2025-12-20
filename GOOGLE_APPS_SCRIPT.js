@@ -1,231 +1,144 @@
 
 /**
- * GEO CLOCK AI - BACKEND (Staff ID Logging Version)
+ * GEO CLOCK AI - BACKEND (Overnight Calculation Support)
  * 
- * SETUP:
- * 1. Create Sheets: "Employ_DB", "Logs", "Site_Config", "Shift_Table"
- * 2. Deploy as Web App -> Execute as: Me -> Who has access: Anyone
+ * LOGS STRUCTURE:
+ * A: Staff_ID, B: Name, C: Date_Clock_in, D: Clock_In_Time, E: In_Lat, F: In_Lng
+ * G: Date_Clock_out, H: Clock_Out_Time, I: Out_Lat, J: Out_Lng, K: Site_ID, L: Working_Hours
  */
 
 const SHEET_EMPLOY_DB = "Employ_DB";
 const SHEET_LOGS = "Logs";
 const SHEET_SITE_CONFIG = "Site_Config";
-const SHEET_SHIFT_TABLE = "Shift_Table"; 
-
 const TIMEZONE = "Asia/Bangkok"; 
 
 function doGet(e) {
-  return ContentService.createTextOutput("GeoClock AI Backend is Running. Staff ID logging enabled.");
+  return ContentService.createTextOutput("GeoClock AI Backend is Running. Overnight Support enabled.");
 }
 
 function doPost(e) {
   const output = { success: false, message: "Unknown Error" };
-  
   try {
-    if (!e.postData || !e.postData.contents) {
-      output.message = "No data received";
-      return sendJSON(output);
-    }
-
+    if (!e.postData || !e.postData.contents) return sendJSON({ success: false, message: "No data" });
     const data = JSON.parse(e.postData.contents);
     
-    if (data.action === "LOGIN_USER") {
-      return sendJSON(handleLogin(data.username, data.password));
-    }
+    if (data.action === "LOGIN_USER") return sendJSON(handleLogin(data.username, data.password));
+    if (data.action === "CLOCK_IN") return sendJSON(handleClockIn(data));
+    if (data.action === "CLOCK_OUT") return sendJSON(handleClockOut(data));
     
-    if (data.action === "CLOCK_IN") {
-      return sendJSON(handleClockIn(data));
-    }
-    
-    if (data.action === "CLOCK_OUT") {
-      return sendJSON(handleClockOut(data));
-    }
-    
-    output.message = "Invalid Action: " + data.action;
-    return sendJSON(output);
-
+    return sendJSON({ success: false, message: "Invalid Action" });
   } catch (error) {
-    output.message = "Server Exception: " + error.toString();
-    return sendJSON(output);
+    return sendJSON({ success: false, message: error.toString() });
   }
 }
 
 function handleLogin(username, password) {
-  const db = getSheetData(SHEET_EMPLOY_DB); 
-  if (db.length === 0) return { success: false, message: "Database is empty." };
-
+  const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]).trim() === String(username).trim() && String(row[1]).trim() === String(password).trim());
-  
-  if (!userRow) return { success: false, message: "Invalid username or password" };
-  
+  if (!userRow) return { success: false, message: "Username หรือ Password ไม่ถูกต้อง" };
   return {
     success: true,
-    user: {
-      username: userRow[0], // LINE ID
-      password: userRow[1], // Staff ID
-      name: userRow[2],
-      siteId: userRow[3],
-      role: userRow[4],
-      shiftGroup: userRow[5]
-    }
+    user: { username: userRow[0], password: userRow[1], name: userRow[2], siteId: userRow[3], role: userRow[4], shiftGroup: userRow[5] }
   };
 }
 
 function handleClockIn(data) {
   const { username, latitude, longitude, accuracy } = data;
-  
-  if (accuracy && accuracy > 200) {
-    return { success: false, message: `GPS signal too weak (${Math.round(accuracy)}m).` };
-  }
-
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
-  if (!userRow) return { success: false, message: "User not found" };
+  if (!userRow) return { success: false, message: "ไม่พบข้อมูลพนักงาน" };
   
-  const staffId = String(userRow[1]); // Get Staff ID from Column B
+  const staffId = String(userRow[1]); 
   const name = userRow[2];
   const role = userRow[4];
   const siteId = userRow[3];
-  
-  const todayStr = getThaiDateString(new Date());
+  const now = new Date();
+  const dateStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
+  const timeStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
 
-  if (role === 'Fixed') {
-    const siteConfig = getSheetData(SHEET_SITE_CONFIG);
-    const site = siteConfig.find(row => String(row[0]) === siteId);
-    if (!site) return { success: false, message: "Site configuration not found." };
-    
-    const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000;
-    const radius = site[4] || 200;
-    
-    if (distance > radius) {
-      return { success: false, message: `Out of range! Distance: ${Math.round(distance)}m.` };
-    }
-  }
-  
-  const timestamp = Utilities.formatDate(new Date(), TIMEZONE, "HH:mm:ss");
-  const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
-  
-  logsSheet.appendRow([
-    todayStr,
-    staffId, // RECORD STAFF ID INSTEAD OF LINE ID
-    name,
-    timestamp,
-    latitude,
-    longitude,
-    "", // Clock Out Time
-    "", // Out Lat
-    "", // Out Lng
-    siteId,
-    "" // Working Hours
-  ]);
-  
-  return { success: true, message: `Clock In Successful at ${timestamp}` };
-}
-
-function handleClockOut(data) {
-  const { username, latitude, longitude, accuracy } = data;
-
-  if (accuracy && accuracy > 200) {
-    return { success: false, message: `GPS signal too weak.` };
-  }
-  
-  const db = getSheetData(SHEET_EMPLOY_DB);
-  const userRow = db.find(row => String(row[0]) === String(username));
-  if (!userRow) return { success: false, message: "User not found" };
-  
-  const staffId = String(userRow[1]); // Identify record by Staff ID
-  const role = userRow[4];
-  const siteId = userRow[3];
-  
-  const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
-  const logs = logsSheet.getDataRange().getValues();
-  
-  // Search for the latest open session for this STAFF ID
-  let rowIndex = -1;
-  for (let i = logs.length - 1; i >= 1; i--) {
-    if (String(logs[i][1]) === staffId && String(logs[i][6]) === "") {
-      rowIndex = i + 1; 
-      break;
-    }
-  }
-  
-  if (rowIndex === -1) {
-    return { success: false, message: "No active session found. Please Clock In first." };
-  }
-  
   if (role === 'Fixed') {
     const siteConfig = getSheetData(SHEET_SITE_CONFIG);
     const site = siteConfig.find(row => String(row[0]) === siteId);
     if (site) {
       const distance = getDistanceFromLatLonInKm(latitude, longitude, site[2], site[3]) * 1000;
-      const radius = site[4] || 200;
-      if (distance > radius) return { success: false, message: "Out of range for Clock Out." };
+      if (distance > (site[4] || 200)) return { success: false, message: "คุณอยู่นอกพื้นที่ปฏิบัติงาน" };
     }
   }
   
-  const timestamp = new Date();
-  const timeStr = Utilities.formatDate(timestamp, TIMEZONE, "HH:mm:ss");
+  const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
+  logsSheet.appendRow([staffId, name, dateStr, timeStr, latitude, longitude, "", "", "", "", siteId, ""]);
+  return { success: true, message: `บันทึกเข้างานสำเร็จ: ${timeStr}` };
+}
+
+function handleClockOut(data) {
+  const { username, latitude, longitude } = data;
+  const db = getSheetData(SHEET_EMPLOY_DB);
+  const userRow = db.find(row => String(row[0]) === String(username));
+  if (!userRow) return { success: false, message: "ไม่พบข้อมูลพนักงาน" };
   
-  // Calculate Hours
-  const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue();
-  let hoursWorked = "";
-  if (inTimeVal) {
-    const d1 = parseTime(inTimeVal);
-    const d2 = parseTime(timeStr);
-    if (d1 && d2) {
-      const diffMs = d2.getTime() - d1.getTime();
-      hoursWorked = (diffMs / (1000 * 60 * 60)).toFixed(2); 
+  const staffId = String(userRow[1]);
+  const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
+  const logs = logsSheet.getDataRange().getValues();
+  
+  let rowIndex = -1;
+  for (let i = logs.length - 1; i >= 1; i--) {
+    if (String(logs[i][0]) === staffId && String(logs[i][7]) === "") {
+      rowIndex = i + 1;
+      break;
     }
   }
   
-  logsSheet.getRange(rowIndex, 7).setValue(timeStr);
-  logsSheet.getRange(rowIndex, 8).setValue(latitude);
-  logsSheet.getRange(rowIndex, 9).setValue(longitude);
-  logsSheet.getRange(rowIndex, 11).setValue(hoursWorked);
+  if (rowIndex === -1) return { success: false, message: "ไม่พบรายการเข้างานที่ยังไม่ปิดกะ" };
   
-  return { success: true, message: `Clock Out Successful. Hours: ${hoursWorked}` };
+  const now = new Date();
+  const dateOutStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
+  const timeOutStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
+
+  // Robust Calculation for Overnight Shifts
+  const inDateVal = logsSheet.getRange(rowIndex, 3).getValue(); // Col C
+  const inTimeVal = logsSheet.getRange(rowIndex, 4).getValue(); // Col D
+  
+  let hoursWorked = "0.00";
+  try {
+    let inDateTime = new Date(inDateVal);
+    // If inTimeVal is string "HH:mm:ss"
+    if (typeof inTimeVal === 'string') {
+      const t = inTimeVal.split(':');
+      inDateTime.setHours(parseInt(t[0]), parseInt(t[1]), parseInt(t[2] || 0));
+    } else if (inTimeVal instanceof Date) {
+      inDateTime.setHours(inTimeVal.getHours(), inTimeVal.getMinutes(), inTimeVal.getSeconds());
+    }
+    
+    const diffMs = now.getTime() - inDateTime.getTime();
+    if (diffMs > 0) {
+      hoursWorked = (diffMs / (1000 * 60 * 60)).toFixed(2);
+    }
+  } catch (e) {
+    console.error("Calculation error", e);
+  }
+
+  logsSheet.getRange(rowIndex, 7).setValue(dateOutStr);
+  logsSheet.getRange(rowIndex, 8).setValue(timeOutStr);
+  logsSheet.getRange(rowIndex, 9).setValue(latitude);
+  logsSheet.getRange(rowIndex, 10).setValue(longitude);
+  logsSheet.getRange(rowIndex, 12).setValue(hoursWorked);
+  
+  return { success: true, message: `บันทึกออกงานสำเร็จ ชั่วโมงทำงาน: ${hoursWorked}` };
 }
 
 function getSheetData(name) {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(name);
-  if (!sheet) return [];
-  const data = sheet.getDataRange().getValues();
-  data.shift(); 
-  return data;
+  return sheet ? sheet.getDataRange().getValues().slice(1) : [];
 }
 
 function sendJSON(content) {
   return ContentService.createTextOutput(JSON.stringify(content)).setMimeType(ContentService.MimeType.JSON);
 }
 
-function getThaiDateString(dateObj) {
-  if (!dateObj) return "";
-  const d = new Date(dateObj);
-  return Utilities.formatDate(d, TIMEZONE, "yyyy-MM-dd");
-}
-
-function parseTime(timeVal) {
-  if (!timeVal) return null;
-  let date = new Date();
-  if (timeVal instanceof Date) {
-    date = new Date(timeVal.getTime());
-  } else if (typeof timeVal === 'string') {
-    const parts = timeVal.split(':');
-    date.setHours(parseInt(parts[0], 10), parseInt(parts[1], 10), parseInt(parts[2] || 0, 10), 0);
-  } else {
-    return null;
-  }
-  date.setFullYear(1970, 0, 1);
-  return date;
-}
-
 function getDistanceFromLatLonInKm(lat1, lon1, lat2, lon2) {
-  var R = 6371; 
-  var dLat = deg2rad(lat2-lat1);  
-  var dLon = deg2rad(lon2-lon1); 
-  var a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon/2) * Math.sin(dLon/2); 
-  var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)); 
-  return R * c;
+  const R = 6371;
+  const dLat = (lat2-lat1) * Math.PI / 180;
+  const dLon = (lon2-lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) + Math.cos(lat1*Math.PI/180) * Math.cos(lat2*Math.PI/180) * Math.sin(dLon/2) * Math.sin(dLon/2);
+  return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
 }
-
-function deg2rad(deg) { return deg * (Math.PI/180); }
