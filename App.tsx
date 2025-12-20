@@ -138,8 +138,8 @@ const App: React.FC = () => {
          </div>
          <div className="w-full max-w-sm bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50">
             <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-slate-800 mb-2">GeoClock AI</h1>
-              <p className="text-slate-500">Employee Attendance</p>
+              <h1 className="text-3xl font-bold text-slate-800 mb-2">SMC Property Soft</h1>
+              <p className="text-slate-500">Employee Application</p>
             </div>
             <form onSubmit={handleLogin} className="space-y-4">
               <div>
