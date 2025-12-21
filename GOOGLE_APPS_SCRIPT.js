@@ -1,10 +1,11 @@
 
 /**
- * GEO CLOCK AI - BACKEND (With OT Approval System)
+ * GEO CLOCK AI - BACKEND (With OT Approval System & Geofencing)
  * 
  * LOGS STRUCTURE: A: Staff_ID, ..., L: Working_Hours
  * OT_REQUESTS STRUCTURE: A: Request_ID, B: Staff_ID, C: Name, D: Site_ID, E: Date, F: Reason, G: Hours, H: Status, I: Approver, J: Timestamp
  * EMPLOY_DB STRUCTURE: A: Username, B: Password/Staff_ID, C: Name, D: Site_ID, E: Role, F: Position
+ * SITE_CONFIG STRUCTURE: A: Site_ID, B: Site_Name, C: Lat, D: Lng, E: Radius
  */
 
 const SHEET_EMPLOY_DB = "Employ_DB";
@@ -34,6 +35,29 @@ function doPost(e) {
   }
 }
 
+// ฟังก์ชันคำนวณระยะทาง (Haversine Formula) - คืนค่าเป็นเมตร
+function calculateDistance(lat1, lon1, lat2, lon2) {
+  const R = 6371000; // รัศมีโลกเป็นเมตร
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * 
+            Math.sin(dLon/2) * Math.sin(dLon/2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+  return R * c;
+}
+
+function getSiteConfig(siteId) {
+  const data = getSheetData(SHEET_SITE_CONFIG);
+  const site = data.find(row => String(row[0]) === String(siteId));
+  if (!site) return null;
+  return {
+    lat: parseFloat(site[2]),
+    lng: parseFloat(site[3]),
+    radius: parseFloat(site[4]) || 200 // ถ้าไม่ระบุ ให้เป็น 200 เมตร
+  };
+}
+
 function getOTRequests(staffId, role, siteId) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(SHEET_OT_REQUESTS);
@@ -46,11 +70,9 @@ function getOTRequests(staffId, role, siteId) {
   
   return data
     .filter(row => {
-      // หัวหน้างานเห็นคำขอทั้งหมดในไซต์ หรือที่ยัง Pending
       if (role === 'Supervisor') {
         return String(row[3]) === String(siteId) || row[7] === "Pending";
       }
-      // พนักงานเห็นเฉพาะของตัวเอง
       return String(row[1]) === String(staffId);
     })
     .map(row => ({
@@ -147,14 +169,36 @@ function getUserLogs(staffId) {
     }));
 }
 
+function validateLocation(role, siteId, userLat, userLng) {
+  if (role !== 'Fixed') return { allowed: true };
+  
+  const config = getSiteConfig(siteId);
+  if (!config) return { allowed: false, message: "ไม่พบการตั้งค่าพิกัดสำหรับไซต์งานนี้" };
+  
+  const distance = calculateDistance(userLat, userLng, config.lat, config.lng);
+  if (distance > config.radius) {
+    return { 
+      allowed: false, 
+      message: `อยู่นอกพื้นที่ปฏิบัติงาน (${distance.toFixed(0)} ม.) รัศมีที่อนุญาตคือ ${config.radius} ม.` 
+    };
+  }
+  
+  return { allowed: true };
+}
+
 function handleClockIn(data) {
   const { username, latitude, longitude } = data;
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
   if (!userRow) return { success: false, message: "ไม่พบข้อมูลพนักงาน" };
+  
   const staffId = String(userRow[1]); 
-  const userRole = userRow[4];
   const siteId = userRow[3];
+  const userRole = userRow[4];
+
+  // ตรวจสอบพิกัดเฉพาะกลุ่ม Fixed
+  const locationCheck = validateLocation(userRole, siteId, latitude, longitude);
+  if (!locationCheck.allowed) return { success: false, message: locationCheck.message };
   
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const now = new Date();
@@ -174,9 +218,15 @@ function handleClockOut(data) {
   const { username, latitude, longitude } = data;
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
+  if (!userRow) return { success: false, message: "ไม่พบข้อมูลพนักงาน" };
+
   const staffId = String(userRow[1]);
-  const userRole = userRow[4];
   const siteId = userRow[3];
+  const userRole = userRow[4];
+
+  // ตรวจสอบพิกัดเฉพาะกลุ่ม Fixed (สำหรับขาออกด้วยเพื่อให้มั่นใจว่ายังอยู่ที่ไซต์)
+  const locationCheck = validateLocation(userRole, siteId, latitude, longitude);
+  if (!locationCheck.allowed) return { success: false, message: locationCheck.message };
 
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
   const logs = logsSheet.getDataRange().getValues();
@@ -193,24 +243,16 @@ function handleClockOut(data) {
   const dateOutStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
   const timeOutStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
   
-  // คำนวณชั่วโมงทำงานจริง
   let workingHours = "0.00";
   try {
     const dateInVal = logs[rowIndex-1][2];
     const timeInVal = logs[rowIndex-1][3];
-    
     const dateInStr = dateInVal instanceof Date ? Utilities.formatDate(dateInVal, TIMEZONE, "yyyy-MM-dd") : String(dateInVal);
-    const timeInStr = String(timeInVal);
-    
-    const startTime = new Date(dateInStr + "T" + timeInStr);
+    const startTime = new Date(dateInStr + "T" + String(timeInVal));
     const diffMs = now.getTime() - startTime.getTime();
     const diffHrs = diffMs / (1000 * 60 * 60);
-    
-    if (diffHrs > 0) {
-      workingHours = diffHrs.toFixed(2);
-    }
+    if (diffHrs > 0) workingHours = diffHrs.toFixed(2);
   } catch (e) {
-    console.error("Error calculating working hours: " + e.toString());
     workingHours = "ERR";
   }
 
