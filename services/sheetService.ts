@@ -1,7 +1,7 @@
 
 import { GeoLocationData, LogType, ApiResponse, OTStatus } from '../types';
 
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw5ZwpJibT4eYefGeYSbK409yTq82EQA_C-7j73HsDSweuy0FEcm1RIQ5rB-nVGBEee7A/exec';
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxe3D3on98vPqZio1qJ5Dkc8Vll4tcaTzhOh6nKw6I-2OopZI1w0CUmS5kVvpBo_ucFkw/exec';
 
 export const loginUser = async (username: string, password: string): Promise<ApiResponse> => {
   try {
@@ -39,7 +39,7 @@ export const sendClockAction = async (username: string, type: LogType, location:
   }
 };
 
-export const requestOT = async (params: { staffId: string, name: string, siteId: string, date: string, reason: string, hours: number, role: string }): Promise<ApiResponse> => {
+export const requestOT = async (params: { staffId: string, name: string, siteId: string, startTime: string, endTime: string, reason: string, role: string }): Promise<ApiResponse> => {
   try {
     const response = await fetch(SCRIPT_URL, {
       method: 'POST',

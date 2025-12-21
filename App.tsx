@@ -24,8 +24,14 @@ const App: React.FC = () => {
   
   const [isOTModalOpen, setIsOTModalOpen] = useState(false);
   
-  const [otDate, setOtDate] = useState(new Date().toISOString().split('T')[0]);
-  const [otHours, setOtHours] = useState(2);
+  // Set default start time to today at 18:00
+  const defaultStart = new Date();
+  defaultStart.setHours(18, 0, 0, 0);
+  const defaultEnd = new Date();
+  defaultEnd.setHours(20, 0, 0, 0);
+
+  const [otStartTime, setOtStartTime] = useState(defaultStart.toISOString().slice(0, 16));
+  const [otEndTime, setOtEndTime] = useState(defaultEnd.toISOString().slice(0, 16));
   const [otReason, setOtReason] = useState("");
 
   // Initialize LIFF and check if already logged in
@@ -33,11 +39,7 @@ const App: React.FC = () => {
     const startLiff = async () => {
       const ok = await initLiff();
       if (ok) {
-        // We can check if user is already logged in to LINE and fetch profile
-        // but to avoid unwanted redirects, we usually wait for user action.
-        // However, if inside LIFF browser, they might be logged in already.
         try {
-          // Non-blocking check
           // @ts-ignore
           if (window.liff.isLoggedIn()) {
             const profile = await getLineProfile();
@@ -154,9 +156,9 @@ const App: React.FC = () => {
         staffId: user.password!,
         name: user.name,
         siteId: user.siteId,
-        date: otDate,
+        startTime: otStartTime.replace('T', ' '),
+        endTime: otEndTime.replace('T', ' '),
         reason: otReason,
-        hours: otHours,
         role: user.role
       });
       if (result.success) {
@@ -333,11 +335,15 @@ const App: React.FC = () => {
               otRequests.map(req => (
                 <div key={req.id} className="bg-white p-5 rounded-[32px] shadow-lg shadow-slate-100/50 border border-slate-50 flex justify-between items-start transition-all hover:translate-y-[-2px]">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2 mb-1">
-                       <span className="text-sm font-black text-slate-800">{req.date}</span>
-                       <span className="bg-blue-50 text-blue-600 text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider">{req.hours} Hrs</span>
+                    <div className="flex flex-col mb-1">
+                       <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest mb-0.5">Time Range</span>
+                       <span className="text-xs font-black text-slate-800">{req.startTime} น.</span>
+                       <span className="text-xs font-black text-slate-400 flex items-center gap-1">
+                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 14l-7 7m0 0l-7-7m7 7V3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                         {req.endTime} น.
+                       </span>
                     </div>
-                    <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[210px]">{req.reason}</p>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[210px] mt-2">{req.reason}</p>
                     {user.role === 'Supervisor' && (
                        <div className="flex items-center gap-2 mt-3 p-1.5 bg-slate-50 rounded-2xl w-fit">
                          <div className="w-6 h-6 rounded-xl bg-blue-600 flex items-center justify-center text-[10px] font-black text-white shadow-sm">{req.name.charAt(0)}</div>
@@ -393,29 +399,41 @@ const App: React.FC = () => {
             
             <div className="space-y-2">
               <h3 className="text-3xl font-black text-slate-800">New Request</h3>
-              <p className="text-slate-400 font-medium text-sm">กรุณากรอกรายละเอียดการทำ OT</p>
+              <p className="text-slate-400 font-medium text-sm">ระบุช่วงเวลาที่คุณจะทำ OT</p>
             </div>
 
-            <form onSubmit={handleOTRequestSubmit} className="space-y-6">
+            <form onSubmit={handleOTRequestSubmit} className="space-y-5">
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">วันที่ปฏิบัติงาน</label>
-                <input type="date" value={otDate} onChange={(e) => setOtDate(e.target.value)} className="w-full px-6 py-4 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold" required />
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">เวลาเริ่มต้น</label>
+                <input 
+                  type="datetime-local" 
+                  value={otStartTime} 
+                  onChange={(e) => setOtStartTime(e.target.value)} 
+                  className="w-full px-6 py-4 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold text-sm" 
+                  required 
+                />
               </div>
               <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">จำนวนชั่วโมง (ประมาณการ)</label>
-                <input type="number" step="0.5" value={otHours} onChange={(e) => setOtHours(parseFloat(e.target.value))} className="w-full px-6 py-4 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold" required />
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">เวลาสิ้นสุด</label>
+                <input 
+                  type="datetime-local" 
+                  value={otEndTime} 
+                  onChange={(e) => setOtEndTime(e.target.value)} 
+                  className="w-full px-6 py-4 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold text-sm" 
+                  required 
+                />
               </div>
               <div className="space-y-2">
                 <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">รายละเอียด / เหตุผล</label>
                 <textarea 
                   value={otReason} 
                   onChange={(e) => setOtReason(e.target.value)} 
-                  className="w-full px-6 py-5 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold h-36 resize-none" 
+                  className="w-full px-6 py-5 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold h-28 resize-none text-sm" 
                   placeholder="คุณกำลังจะทำงานอะไร?" 
                   required
                 ></textarea>
               </div>
-              <div className="flex gap-4 pt-4">
+              <div className="flex gap-4 pt-2">
                 <Button type="submit" variant="primary" fullWidth className="py-5 text-lg" isLoading={isLoading}>ส่งคำขอ</Button>
               </div>
             </form>
@@ -445,7 +463,7 @@ const App: React.FC = () => {
         @keyframes scale-in { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         @keyframes bounce-short { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -15px); } }
         .animate-fade-in { animation: fade-in 0.4s ease-out; }
-        .animate-scale-in { animation: scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .animate-scale-in { animation: scale-in 0.5: cubic-bezier(0.34, 1.56, 0.64, 1); }
         .animate-bounce-short { animation: bounce-short 2s ease-in-out infinite; }
       `}</style>
     </div>

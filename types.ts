@@ -25,9 +25,10 @@ export interface OTRequest {
   id: string;
   staffId: string;
   name: string;
-  date: string;
+  siteId: string;
   reason: string;
-  hours: number;
+  startTime: string; // ISO format or YYYY-MM-DD HH:mm
+  endTime: string;   // ISO format or YYYY-MM-DD HH:mm
   status: OTStatus;
   approverName?: string;
   timestamp: string;

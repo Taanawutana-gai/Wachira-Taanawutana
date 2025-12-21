@@ -57,29 +57,30 @@ function getOTRequests(staffId, role, siteId) {
   let sheet = ss.getSheetByName(SHEET_OT_REQUESTS);
   if (!sheet) {
     sheet = ss.insertSheet(SHEET_OT_REQUESTS);
-    sheet.appendRow(["Request_ID", "Staff_ID", "Name", "Site_ID", "Date", "Reason", "Hours", "Status", "Approver", "Timestamp"]);
+    sheet.appendRow(["Timestamp", "Request_ID", "Staff_ID", "Name", "Site_ID", "Reason", "OT_Start", "OT_End", "Status", "Approver"]);
   }
   const data = sheet.getDataRange().getValues();
   data.shift(); 
   
   return data
     .filter(row => {
+      // คอลัมน์ E (Site_ID) คือ index 4, คอลัมน์ I (Status) คือ index 8
       if (role === 'Supervisor') {
-        return String(row[3]) === String(siteId) || row[7] === "Pending";
+        return String(row[4]) === String(siteId) || row[8] === "Pending";
       }
-      return String(row[1]) === String(staffId);
+      return String(row[2]) === String(staffId);
     })
     .map(row => ({
-      id: row[0],
-      staffId: row[1],
-      name: row[2],
-      siteId: row[3],
-      date: row[4] instanceof Date ? Utilities.formatDate(row[4], TIMEZONE, "yyyy-MM-dd") : row[4],
+      timestamp: row[0] instanceof Date ? Utilities.formatDate(row[0], TIMEZONE, "yyyy-MM-dd HH:mm:ss") : row[0],
+      id: row[1],
+      staffId: row[2],
+      name: row[3],
+      siteId: row[4],
       reason: row[5],
-      hours: row[6],
-      status: row[7],
-      approverName: row[8],
-      timestamp: row[9]
+      startTime: row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "yyyy-MM-dd HH:mm") : row[6],
+      endTime: row[7] instanceof Date ? Utilities.formatDate(row[7], TIMEZONE, "yyyy-MM-dd HH:mm") : row[7],
+      status: row[8],
+      approverName: row[9]
     }))
     .reverse();
 }
@@ -109,12 +110,13 @@ function handleLogin(username, password) {
 }
 
 function handleRequestOT(data) {
-  const { staffId, name, siteId, date, reason, hours, role } = data;
+  const { staffId, name, siteId, startTime, endTime, reason, role } = data;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_OT_REQUESTS);
   const requestId = "OT-" + Utilities.formatDate(new Date(), TIMEZONE, "yyyyMMdd-HHmmss") + "-" + staffId;
   
-  sheet.appendRow([requestId, staffId, name, siteId, date, reason, hours, "Pending", "", new Date()]);
+  // A: Timestamp, B: Request_ID, C: Staff_ID, D: Name, E: Site_ID, F: Reason, G: OT_Start, H: OT_End, I: Status, J: Approver
+  sheet.appendRow([new Date(), requestId, staffId, name, siteId, reason, startTime, endTime, "Pending", ""]);
   
   return { 
     success: true, 
@@ -130,9 +132,10 @@ function handleUpdateOTStatus(data) {
   const rows = sheet.getDataRange().getValues();
   
   for (let i = 1; i < rows.length; i++) {
-    if (String(rows[i][0]) === String(requestId)) {
-      sheet.getRange(i + 1, 8).setValue(status);
-      sheet.getRange(i + 1, 9).setValue(approverName);
+    // Request_ID อยู่คอลัมน์ B (index 1)
+    if (String(rows[i][1]) === String(requestId)) {
+      sheet.getRange(i + 1, 9).setValue(status);  // Status อยู่คอลัมน์ I (index 9)
+      sheet.getRange(i + 1, 10).setValue(approverName); // Approver อยู่คอลัมน์ J (index 10)
       break;
     }
   }
@@ -188,7 +191,7 @@ function handleClockIn(data) {
   
   const staffId = String(userRow[1]); 
   const siteId = userRow[3];
-  const userRole = userRow[4];
+  const userRole = userRole = userRow[4];
 
   const locationCheck = validateLocation(userRole, siteId, latitude, longitude);
   if (!locationCheck.allowed) return { success: false, message: locationCheck.message };
@@ -229,7 +232,7 @@ function handleClockOut(data) {
       break;
     }
   }
-  if (rowIndex === -1) return { success: false, message: "ไม่พบรายการเข้างานที่ยังไม่ปิดกะ" };
+  if (rowIndex === -1) return { success: false, message: "ไม่พบการลงเวลาเข้างาน" };
   
   const now = new Date();
   const dateOutStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
@@ -241,11 +244,9 @@ function handleClockOut(data) {
     const dateInVal = rowData[2];
     const timeInVal = rowData[3];
     
-    // จัดการ Date/Time ให้เป็น String ที่แน่นอนก่อนคำนวณ
     const dateInStr = dateInVal instanceof Date ? Utilities.formatDate(dateInVal, TIMEZONE, "yyyy-MM-dd") : String(dateInVal);
     const timeInStr = timeInVal instanceof Date ? Utilities.formatDate(timeInVal, TIMEZONE, "HH:mm:ss") : String(timeInVal);
     
-    // สร้าง Date Object สำหรับคำนวณ Ms
     const startTime = new Date(dateInStr.split('T')[0] + "T" + timeInStr);
     const diffMs = now.getTime() - startTime.getTime();
     
