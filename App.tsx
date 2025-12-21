@@ -226,7 +226,7 @@ const App: React.FC = () => {
             
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username (LINE ID)</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">User ID</label>
                 <input 
                   type="text" 
                   value={usernameInput} 
