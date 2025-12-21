@@ -237,7 +237,7 @@ const App: React.FC = () => {
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Staff ID / Password</label>
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Staff ID</label>
                 <input 
                   type="password" 
                   value={passwordInput} 
@@ -249,7 +249,7 @@ const App: React.FC = () => {
               {error && <div className="text-red-500 text-[11px] font-bold bg-red-50 p-3 rounded-xl border border-red-100 animate-pulse">{error}</div>}
               <Button type="submit" variant="primary" fullWidth className="py-5 text-lg shadow-blue-300" isLoading={isLoading} disabled={!usernameInput}>Log In</Button>
             </form>
-            <p className="mt-6 text-center text-[10px] text-slate-400 font-bold uppercase tracking-tighter">SMC Property Management Group</p>
+            <p className="mt-6 text-center text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Management By SMC Property Soft</p>
          </div>
       </div>
     );
