@@ -1,8 +1,8 @@
 
 import * as React from 'react';
 import { useState, useEffect } from 'react';
-import { User, LogType, GeoLocationData } from './types';
-import { loginUser, sendClockAction } from './services/sheetService';
+import { User, LogType, GeoLocationData, OTRequest, OTStatus } from './types';
+import { loginUser, sendClockAction, requestOT, updateOTStatus } from './services/sheetService';
 import { getDailyInsight } from './services/geminiService';
 import { Button } from './components/Button';
 import { AttendanceStats } from './components/AttendanceStats';
@@ -10,6 +10,7 @@ import { AttendanceStats } from './components/AttendanceStats';
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [logs, setLogs] = useState<any[]>([]);
+  const [otRequests, setOtRequests] = useState<OTRequest[]>([]);
   
   const [usernameInput, setUsernameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
@@ -20,220 +21,201 @@ const App: React.FC = () => {
   const [aiInsight, setAiInsight] = useState<string | null>(null);
   
   const [isProfileOpen, setIsProfileOpen] = useState(false);
-  const [isLineModalOpen, setIsLineModalOpen] = useState(false); 
-  const [lineUserId, setLineUserId] = useState<string>("");
-
-  useEffect(() => {
-    const initLiff = async () => {
-      try {
-        // @ts-ignore
-        const liff = window.liff;
-        if (liff) {
-          await liff.init({ liffId: '2007509057-QWw2WLrq' });
-          if (liff.isLoggedIn()) {
-            const profile = await liff.getProfile();
-            setLineUserId(profile.userId);
-            setUsernameInput(profile.userId);
-          }
-        }
-      } catch (err) {
-        console.error("LIFF Initialization failed", err);
-      }
-    };
-    initLiff();
-  }, []);
-
-  const handleLiffLogin = () => {
-    // @ts-ignore
-    if (window.liff) window.liff.login();
-  };
+  const [isOTModalOpen, setIsOTModalOpen] = useState(false);
+  
+  // OT Form State
+  const [otDate, setOtDate] = useState(new Date().toISOString().split('T')[0]);
+  const [otHours, setOtHours] = useState(2);
+  const [otReason, setOtReason] = useState("");
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!usernameInput || !passwordInput) {
-      setError("Please connect LINE and enter password");
-      return;
-    }
-
     setIsLoading(true);
     setError(null);
-    setSuccess(null);
-
     try {
       const result = await loginUser(usernameInput, passwordInput);
       if (result.success && result.user) {
         setUser(result.user);
         setLogs(result.logs || []);
-        setSuccess("Login successful!");
+        setOtRequests(result.otRequests || []);
       } else {
-        setError(result.message || "Invalid username or password");
+        setError(result.message || "Login failed");
       }
     } catch (err) {
-      setError("Network error connecting to server.");
+      setError("Network error.");
     } finally {
       setIsLoading(false);
     }
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    setLogs([]);
-    setPasswordInput("");
-    setSuccess(null);
-    setError(null);
-    setAiInsight(null);
-    setIsProfileOpen(false);
-  };
-
-  const handleClockAction = async (type: LogType) => {
+  const handleOTRequestSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
     if (!user) return;
     setIsLoading(true);
-    setError(null);
-    setSuccess(null);
-    setAiInsight(null);
-
-    if (!navigator.geolocation) {
-      setError("Geolocation not supported.");
+    try {
+      const result = await requestOT({
+        staffId: user.password!, // Using staffId from password field as per current setup
+        name: user.name,
+        siteId: user.siteId,
+        date: otDate,
+        reason: otReason,
+        hours: otHours
+      });
+      if (result.success) {
+        setOtRequests(result.otRequests || []);
+        setIsOTModalOpen(false);
+        setSuccess(result.message || "OT Requested");
+        setOtReason("");
+      } else {
+        setError(result.message || "Failed to request OT");
+      }
+    } catch (err) {
+      setError("Network error.");
+    } finally {
       setIsLoading(false);
-      return;
     }
+  };
 
-    navigator.geolocation.getCurrentPosition(
-      async (position) => {
-        const location: GeoLocationData = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-        };
-
-        const result = await sendClockAction(user.username, type, location);
-
-        if (result.success) {
-          const timeStr = new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' });
-          setSuccess(result.message || "Success!");
-          if (result.logs) setLogs(result.logs);
-          
-          const insight = await getDailyInsight(user.name, type === LogType.CLOCK_IN ? 'in' : 'out', timeStr);
-          setAiInsight(insight);
-        } else {
-          setError(result.message || "Action failed.");
-        }
-        setIsLoading(false);
-      },
-      (err) => {
-        setError("GPS Permission Denied.");
-        setIsLoading(false);
-      },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
-    );
+  const handleApproveReject = async (requestId: string, status: OTStatus) => {
+    if (!user) return;
+    setIsLoading(true);
+    try {
+      const result = await updateOTStatus({
+        requestId,
+        status,
+        approverName: user.name,
+        staffId: user.password!,
+        role: user.role,
+        siteId: user.siteId
+      });
+      if (result.success) {
+        setOtRequests(result.otRequests || []);
+        setSuccess(`OT ${status} successfully`);
+      } else {
+        setError(result.message || "Update failed");
+      }
+    } catch (err) {
+      setError("Network error.");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4 relative">
-         <div className="absolute top-0 right-0 p-6">
-            <button onClick={() => setIsLineModalOpen(true)} className="w-10 h-10 bg-white rounded-full shadow-md flex items-center justify-center text-slate-400 hover:text-blue-600 border border-slate-100 transition-all">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-            </button>
-         </div>
-         <div className="w-full max-w-sm bg-white p-8 rounded-3xl shadow-xl shadow-slate-200/50">
-            <div className="text-center mb-8">
-              <h1 className="text-3xl font-bold text-slate-800 mb-2">SMC Property Soft</h1>
-              <p className="text-slate-500">Employee Application</p>
-            </div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4">
+         <div className="w-full max-w-sm bg-white p-8 rounded-3xl shadow-xl">
+            <h1 className="text-3xl font-bold text-center text-slate-800 mb-2">SMC Property</h1>
+            <p className="text-slate-500 text-center mb-8">Attendance & OT System</p>
             <form onSubmit={handleLogin} className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Username (LINE ID)</label>
-                <input type="text" value={usernameInput} readOnly className="w-full px-4 py-3 rounded-xl bg-slate-100 border border-slate-200 text-slate-500 font-mono text-sm" placeholder="Connect LINE first" />
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1 ml-1">Staff ID</label>
-                <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:border-blue-500 outline-none transition-all" placeholder="Enter Staff ID" />
-              </div>
-              {error && <div className="bg-red-50 p-3 rounded-lg flex items-center gap-2 border border-red-100 text-red-600 text-sm font-medium">{error}</div>}
-              <Button type="submit" variant="primary" fullWidth isLoading={isLoading} disabled={!usernameInput} className="mt-4">Log In</Button>
+              <input type="text" value={usernameInput} onChange={(e) => setUsernameInput(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border" placeholder="Username" />
+              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border" placeholder="Staff ID (Password)" />
+              {error && <div className="text-red-500 text-xs font-medium">{error}</div>}
+              <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>Log In</Button>
             </form>
          </div>
-         {isLineModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-sm">
-              <div className="bg-white rounded-3xl shadow-2xl max-w-xs w-full p-6">
-                  <div className="text-center mb-6">
-                      <div className="w-16 h-16 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center mx-auto mb-3">
-                          <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2"></path></svg>
-                      </div>
-                      <h3 className="text-lg font-bold text-slate-800">LINE Identification</h3>
-                  </div>
-                  <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-6 font-mono text-[10px] text-slate-700 break-all">{lineUserId || "Not Connected"}</div>
-                  <div className="space-y-3">
-                       {!lineUserId && <Button fullWidth onClick={handleLiffLogin} className="bg-[#06C755] text-white">Connect LINE</Button>}
-                      <Button variant="outline" fullWidth onClick={() => setIsLineModalOpen(false)}>Close</Button>
-                  </div>
-              </div>
-          </div>
-         )}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 pb-20">
-      <header className="bg-white shadow-sm sticky top-0 z-10">
-        <div className="max-w-3xl mx-auto px-4 py-4 flex justify-between items-center">
+    <div className="min-h-screen bg-slate-50 pb-24">
+      <header className="bg-white shadow-sm p-4 sticky top-0 z-10 flex justify-between items-center">
           <div className="flex items-center gap-3">
-             <div className="w-10 h-10 rounded-full bg-blue-100 border border-slate-200 flex items-center justify-center text-blue-600 font-bold">{user.name.charAt(0)}</div>
+             <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold">{user.name.charAt(0)}</div>
              <div>
                <h2 className="font-bold text-slate-800 text-sm">{user.name}</h2>
-               <p className="text-[10px] text-slate-400 uppercase tracking-wide">{user.role} • {user.siteId}</p>
+               <p className="text-[10px] text-slate-400 uppercase">{user.position} • {user.role} • {user.siteId}</p>
              </div>
           </div>
-          <button onClick={() => setIsProfileOpen(true)} className="p-2 text-slate-400 hover:text-blue-600 bg-slate-50 rounded-full transition-colors">
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"></path></svg>
-          </button>
-        </div>
+          <button onClick={() => setUser(null)} className="text-slate-400 hover:text-red-500"><svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg></button>
       </header>
-      <main className="max-w-3xl mx-auto px-4 py-8 space-y-6">
-        <div className="text-center mb-4">
-            <h1 className="text-2xl font-bold text-slate-700">Attendance</h1>
-            <p className="text-slate-400 text-sm">{new Date().toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</p>
-        </div>
-        <section className="bg-white p-8 rounded-3xl shadow-lg border border-slate-100">
-          <div className="grid grid-cols-1 gap-6">
-              <Button variant="primary" onClick={() => handleClockAction(LogType.CLOCK_IN)} className="h-20 text-xl" fullWidth isLoading={isLoading}>Clock In</Button>
-              <Button variant="danger" onClick={() => handleClockAction(LogType.CLOCK_OUT)} className="h-16 text-lg bg-orange-500 hover:bg-orange-600 shadow-orange-200" fullWidth isLoading={isLoading}>Clock Out</Button>
+
+      <main className="max-w-xl mx-auto p-4 space-y-6">
+        {/* Attendance Section */}
+        <section className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
+          <div className="grid grid-cols-2 gap-4">
+              <Button onClick={() => {}} variant="primary" className="h-24 flex-col text-sm"><span className="text-2xl font-bold">Clock In</span></Button>
+              <Button onClick={() => {}} variant="danger" className="h-24 flex-col text-sm"><span className="text-2xl font-bold">Clock Out</span></Button>
           </div>
-          {error && <div className="mt-6 p-4 bg-red-50 text-red-600 rounded-2xl text-sm flex items-start gap-3 border border-red-100 font-medium">Alert: {error}</div>}
-          {success && (
-              <div className="mt-6 p-4 bg-green-50 text-green-800 rounded-2xl border border-green-100">
-                <div className="font-bold flex items-center gap-2 text-lg mb-1"><svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>{success}</div>
-                {aiInsight && <div className="mt-2 text-sm italic text-green-700 bg-white/50 p-3 rounded-xl border border-green-200">" {aiInsight} "</div>}
-              </div>
-          )}
         </section>
+
+        {/* OT Section */}
+        <section className="space-y-3">
+          <div className="flex justify-between items-center px-1">
+            <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest">Overtime Requests</h3>
+            <button onClick={() => setIsOTModalOpen(true)} className="text-xs font-bold text-blue-600 bg-blue-50 px-3 py-1.5 rounded-full">+ Request OT</button>
+          </div>
+          
+          <div className="space-y-3">
+            {otRequests.length === 0 ? (
+              <div className="bg-white p-8 rounded-2xl text-center text-slate-400 text-sm border border-dashed">No OT requests found</div>
+            ) : (
+              otRequests.map(req => (
+                <div key={req.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-center">
+                  <div>
+                    <div className="text-sm font-bold text-slate-700">{req.date} ({req.hours} hrs)</div>
+                    <div className="text-xs text-slate-500 line-clamp-1">{req.reason}</div>
+                    {user.role === 'Supervisor' && <div className="text-[10px] text-blue-500 font-bold mt-1">From: {req.name}</div>}
+                  </div>
+                  <div className="flex flex-col items-end gap-2">
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase ${
+                      req.status === 'Approved' ? 'bg-green-100 text-green-600' :
+                      req.status === 'Rejected' ? 'bg-red-100 text-red-600' : 'bg-yellow-100 text-yellow-600'
+                    }`}>
+                      {req.status}
+                    </span>
+                    {user.role === 'Supervisor' && req.status === 'Pending' && (
+                      <div className="flex gap-1">
+                        <button onClick={() => handleApproveReject(req.id, OTStatus.APPROVED)} className="p-1 text-green-500 hover:bg-green-50 rounded"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg></button>
+                        <button onClick={() => handleApproveReject(req.id, OTStatus.REJECTED)} className="p-1 text-red-500 hover:bg-red-50 rounded"><svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg></button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </section>
+
         <section>
-             <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Work Statistics</h3>
-             <AttendanceStats logs={logs} />
+          <h3 className="text-sm font-bold text-slate-400 uppercase tracking-widest mb-3 ml-1">Statistics</h3>
+          <AttendanceStats logs={logs} />
         </section>
       </main>
 
-      {isProfileOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 bg-slate-900/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl shadow-2xl max-w-sm w-full p-6 relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-24 bg-gradient-to-r from-blue-500 to-indigo-600"></div>
-            <div className="relative pt-8 flex flex-col items-center">
-                <div className="w-20 h-20 rounded-full border-4 border-white shadow-lg bg-white mb-3 flex items-center justify-center text-3xl font-bold text-slate-300">{user.name.charAt(0)}</div>
-                <h3 className="text-xl font-bold text-slate-800">{user.name}</h3>
-                <p className="text-slate-500 text-sm mb-6">{user.role}</p>
-                <div className="w-full bg-slate-50 rounded-xl p-4 space-y-3 mb-6">
-                    <div className="flex justify-between items-center text-xs border-b border-slate-100 pb-2"><span className="text-slate-400">Site ID</span><span className="font-medium text-slate-700">{user.siteId}</span></div>
-                    <div className="flex justify-between items-center text-xs border-b border-slate-100 pb-2"><span className="text-slate-400">Group</span><span className="font-medium text-slate-700">{user.shiftGroup || '-'}</span></div>
-                    <div className="flex flex-col gap-1 text-xs pt-1"><span className="text-slate-400 uppercase font-bold text-[9px]">LINE Identifier</span><span className="font-mono text-[10px] text-slate-500 break-all">{lineUserId || 'Not linked'}</span></div>
-                </div>
-                <div className="flex gap-3 w-full">
-                  <button onClick={() => setIsProfileOpen(false)} className="flex-1 py-3 text-sm font-bold text-slate-600 hover:bg-slate-100 rounded-xl transition-colors">Close</button>
-                  <button onClick={handleLogout} className="flex-1 py-3 text-sm font-bold text-red-500 hover:bg-red-50 rounded-xl transition-colors">Logout</button>
-                </div>
-            </div>
+      {/* OT Request Modal */}
+      {isOTModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-sm p-6">
+            <h3 className="text-xl font-bold text-slate-800 mb-4">Request Overtime</h3>
+            <form onSubmit={handleOTRequestSubmit} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">OT Date</label>
+                <input type="date" value={otDate} onChange={(e) => setOtDate(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border outline-none" required />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Estimated Hours</label>
+                <input type="number" step="0.5" value={otHours} onChange={(e) => setOtHours(parseFloat(e.target.value))} className="w-full px-4 py-3 rounded-xl bg-slate-50 border outline-none" required />
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Reason / Task</label>
+                <textarea value={otReason} onChange={(e) => setOtReason(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border outline-none h-24" placeholder="Description of work..." required></textarea>
+              </div>
+              <div className="flex gap-3">
+                <Button type="button" variant="outline" fullWidth onClick={() => setIsOTModalOpen(false)}>Cancel</Button>
+                <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>Submit Request</Button>
+              </div>
+            </form>
           </div>
+        </div>
+      )}
+
+      {/* Notification Toast (Simplified) */}
+      {(success || error) && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 px-6 py-3 rounded-2xl shadow-lg z-50 text-white font-medium text-sm transition-all animate-bounce ${success ? 'bg-green-600' : 'bg-red-600'}`}>
+          {success || error}
+          <button onClick={() => {setSuccess(null); setError(null)}} className="ml-3 font-bold opacity-70">×</button>
         </div>
       )}
     </div>

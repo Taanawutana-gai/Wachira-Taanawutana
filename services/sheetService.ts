@@ -1,7 +1,7 @@
-import { GeoLocationData, LogType, ApiResponse } from '../types';
 
-// TODO: UPDATE THIS URL AFTER "NEW DEPLOYMENT"
-const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzyzpngfaZlUmoAFzkCEmyayObIkxQJReT-ftdB17R4rdBknKDrmoh2GJE6os1hkBxqGQ/exec';
+import { GeoLocationData, LogType, ApiResponse, OTStatus } from '../types';
+
+const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbw2SQdX3ZzIOOTqkYYS2YPkw3pmL28_bqsOE8tFhZ6EavQNNfLw0F0MpdwyQtmPW0bkug/exec';
 
 export const loginUser = async (username: string, password: string): Promise<ApiResponse> => {
   try {
@@ -9,59 +9,62 @@ export const loginUser = async (username: string, password: string): Promise<Api
       method: 'POST',
       mode: 'cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({
-        action: 'LOGIN_USER',
-        username: username,
-        password: password
-      })
+      body: JSON.stringify({ action: 'LOGIN_USER', username, password })
     });
-
     const text = await response.text();
-    
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      console.error("Invalid JSON response:", text);
-      return { 
-        success: false, 
-        message: "Server Error: Script configuration mismatch. Please check Script URL and Deployment." 
-      };
-    }
-
+    return JSON.parse(text);
   } catch (error) {
-    console.error("Login Error:", error);
-    return { success: false, message: "Connection failed. Please check internet." };
+    return { success: false, message: "Connection failed." };
   }
 };
 
-export const sendClockAction = async (
-  username: string, 
-  type: LogType, 
-  location: GeoLocationData
-): Promise<ApiResponse> => {
+export const sendClockAction = async (username: string, type: LogType, location: GeoLocationData): Promise<ApiResponse> => {
   try {
     const response = await fetch(SCRIPT_URL, {
       method: 'POST',
       mode: 'cors',
       headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
-        action: type, // CLOCK_IN or CLOCK_OUT
-        username: username,
+        action: type,
+        username,
         latitude: location.latitude,
         longitude: location.longitude,
         accuracy: location.accuracy
       })
     });
-    
     const text = await response.text();
-    try {
-      return JSON.parse(text);
-    } catch (e) {
-      return { success: false, message: "Server Error: Invalid response." };
-    }
-
+    return JSON.parse(text);
   } catch (error) {
-    console.error("Clock Action Error:", error);
-    return { success: false, message: "Network error during clocking." };
+    return { success: false, message: "Network error." };
+  }
+};
+
+export const requestOT = async (params: { staffId: string, name: string, siteId: string, date: string, reason: string, hours: number }): Promise<ApiResponse> => {
+  try {
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'REQUEST_OT', ...params })
+    });
+    const text = await response.text();
+    return JSON.parse(text);
+  } catch (error) {
+    return { success: false, message: "Failed to request OT." };
+  }
+};
+
+export const updateOTStatus = async (params: { requestId: string, status: OTStatus, approverName: string, staffId: string, role: string, siteId: string }): Promise<ApiResponse> => {
+  try {
+    const response = await fetch(SCRIPT_URL, {
+      method: 'POST',
+      mode: 'cors',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'UPDATE_OT_STATUS', ...params })
+    });
+    const text = await response.text();
+    return JSON.parse(text);
+  } catch (error) {
+    return { success: false, message: "Failed to update OT status." };
   }
 };

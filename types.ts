@@ -1,16 +1,35 @@
+
 export interface User {
   username: string;
   password?: string;
   name: string;
   siteId: string;
-  role: 'Fixed' | 'Roaming';
-  shiftGroup: string;
+  role: 'Fixed' | 'Roaming' | 'Supervisor';
+  position: string;
   avatarUrl?: string;
 }
 
 export enum LogType {
   CLOCK_IN = 'CLOCK_IN',
   CLOCK_OUT = 'CLOCK_OUT'
+}
+
+export enum OTStatus {
+  PENDING = 'Pending',
+  APPROVED = 'Approved',
+  REJECTED = 'Rejected'
+}
+
+export interface OTRequest {
+  id: string;
+  staffId: string;
+  name: string;
+  date: string;
+  reason: string;
+  hours: number;
+  status: OTStatus;
+  approverName?: string;
+  timestamp: string;
 }
 
 export interface GeoLocationData {
@@ -20,7 +39,7 @@ export interface GeoLocationData {
 }
 
 export interface AttendanceLog {
-  id: string; // Used for UI key
+  id: string;
   userId?: string;
   date: string;
   clockInTime?: string;
@@ -33,4 +52,5 @@ export interface ApiResponse {
   message?: string;
   user?: User;
   logs?: any[];
+  otRequests?: OTRequest[];
 }
