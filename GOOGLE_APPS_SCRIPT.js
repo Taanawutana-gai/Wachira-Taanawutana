@@ -4,6 +4,7 @@
  * 
  * LOGS STRUCTURE: A: Staff_ID, ..., L: Working_Hours
  * OT_REQUESTS STRUCTURE: A: Request_ID, B: Staff_ID, C: Name, D: Site_ID, E: Date, F: Reason, G: Hours, H: Status, I: Approver, J: Timestamp
+ * EMPLOY_DB STRUCTURE: A: Username, B: Password/Staff_ID, C: Name, D: Site_ID, E: Role, F: Position
  */
 
 const SHEET_EMPLOY_DB = "Employ_DB";
@@ -45,11 +46,11 @@ function getOTRequests(staffId, role, siteId) {
   
   return data
     .filter(row => {
+      // หัวหน้างานเห็นคำขอทั้งหมดในไซต์ หรือที่ยัง Pending
       if (role === 'Supervisor') {
-        // หัวหน้าดูของไซด์ตัวเอง หรือทั้งหมดที่ Pending
         return String(row[3]) === String(siteId) || row[7] === "Pending";
       }
-      // พนักงานดูของตัวเอง
+      // พนักงานเห็นเฉพาะของตัวเอง
       return String(row[1]) === String(staffId);
     })
     .map(row => ({
@@ -64,7 +65,7 @@ function getOTRequests(staffId, role, siteId) {
       approverName: row[8],
       timestamp: row[9]
     }))
-    .reverse(); // ล่าสุดขึ้นก่อน
+    .reverse();
 }
 
 function handleLogin(username, password) {
@@ -92,7 +93,7 @@ function handleLogin(username, password) {
 }
 
 function handleRequestOT(data) {
-  const { staffId, name, siteId, date, reason, hours } = data;
+  const { staffId, name, siteId, date, reason, hours, role } = data;
   const ss = SpreadsheetApp.getActiveSpreadsheet();
   const sheet = ss.getSheetByName(SHEET_OT_REQUESTS);
   const requestId = "OT-" + Utilities.formatDate(new Date(), TIMEZONE, "yyyyMMdd-HHmmss") + "-" + staffId;
@@ -101,8 +102,8 @@ function handleRequestOT(data) {
   
   return { 
     success: true, 
-    message: "ส่งคำขอ OT เรียบร้อยแล้ว รอการอนุมัติ",
-    otRequests: getOTRequests(staffId, 'Fixed', siteId) // รีเฟรชข้อมูล
+    message: "ส่งคำขอ OT เรียบร้อยแล้ว",
+    otRequests: getOTRequests(staffId, role, siteId)
   };
 }
 
@@ -122,7 +123,7 @@ function handleUpdateOTStatus(data) {
   
   return { 
     success: true, 
-    message: `ทำรายการ ${status} สำเร็จ`,
+    message: `ดำเนินการ ${status} สำเร็จ`,
     otRequests: getOTRequests(staffId, role, siteId)
   };
 }
