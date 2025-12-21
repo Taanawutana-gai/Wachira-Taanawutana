@@ -35,9 +35,8 @@ function doPost(e) {
   }
 }
 
-// ฟังก์ชันคำนวณระยะทาง (Haversine Formula) - คืนค่าเป็นเมตร
 function calculateDistance(lat1, lon1, lat2, lon2) {
-  const R = 6371000; // รัศมีโลกเป็นเมตร
+  const R = 6371000; 
   const dLat = (lat2 - lat1) * Math.PI / 180;
   const dLon = (lon2 - lon1) * Math.PI / 180;
   const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
@@ -54,7 +53,7 @@ function getSiteConfig(siteId) {
   return {
     lat: parseFloat(site[2]),
     lng: parseFloat(site[3]),
-    radius: parseFloat(site[4]) || 200 // ถ้าไม่ระบุ ให้เป็น 200 เมตร
+    radius: parseFloat(site[4]) || 200 
   };
 }
 
@@ -66,7 +65,7 @@ function getOTRequests(staffId, role, siteId) {
     sheet.appendRow(["Request_ID", "Staff_ID", "Name", "Site_ID", "Date", "Reason", "Hours", "Status", "Approver", "Timestamp"]);
   }
   const data = sheet.getDataRange().getValues();
-  data.shift(); // Remove header
+  data.shift(); 
   
   return data
     .filter(row => {
@@ -165,7 +164,7 @@ function getUserLogs(staffId) {
       timeIn: row[3],
       dateOut: row[6],
       timeOut: row[7],
-      workingHours: row[11] || 0
+      workingHours: row[11] || "0 นาที"
     }));
 }
 
@@ -196,7 +195,6 @@ function handleClockIn(data) {
   const siteId = userRow[3];
   const userRole = userRow[4];
 
-  // ตรวจสอบพิกัดเฉพาะกลุ่ม Fixed
   const locationCheck = validateLocation(userRole, siteId, latitude, longitude);
   if (!locationCheck.allowed) return { success: false, message: locationCheck.message };
   
@@ -224,7 +222,6 @@ function handleClockOut(data) {
   const siteId = userRow[3];
   const userRole = userRow[4];
 
-  // ตรวจสอบพิกัดเฉพาะกลุ่ม Fixed (สำหรับขาออกด้วยเพื่อให้มั่นใจว่ายังอยู่ที่ไซต์)
   const locationCheck = validateLocation(userRole, siteId, latitude, longitude);
   if (!locationCheck.allowed) return { success: false, message: locationCheck.message };
 
@@ -243,28 +240,37 @@ function handleClockOut(data) {
   const dateOutStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
   const timeOutStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
   
-  let workingHours = "0.00";
+  let workingHoursResult = "0 นาที";
   try {
     const dateInVal = logs[rowIndex-1][2];
     const timeInVal = logs[rowIndex-1][3];
     const dateInStr = dateInVal instanceof Date ? Utilities.formatDate(dateInVal, TIMEZONE, "yyyy-MM-dd") : String(dateInVal);
     const startTime = new Date(dateInStr + "T" + String(timeInVal));
     const diffMs = now.getTime() - startTime.getTime();
-    const diffHrs = diffMs / (1000 * 60 * 60);
-    if (diffHrs > 0) workingHours = diffHrs.toFixed(2);
+    
+    // คำนวณเป็นนาทีและปัดเศษ
+    const totalMinutes = Math.round(diffMs / (1000 * 60));
+    const h = Math.floor(totalMinutes / 60);
+    const m = totalMinutes % 60;
+    
+    if (h > 0) {
+      workingHoursResult = h + " ชม. " + m + " นาที";
+    } else {
+      workingHoursResult = m + " นาที";
+    }
   } catch (e) {
-    workingHours = "ERR";
+    workingHoursResult = "ERR";
   }
 
   logsSheet.getRange(rowIndex, 7).setValue(dateOutStr);
   logsSheet.getRange(rowIndex, 8).setValue(timeOutStr);
   logsSheet.getRange(rowIndex, 9).setValue(latitude);
   logsSheet.getRange(rowIndex, 10).setValue(longitude);
-  logsSheet.getRange(rowIndex, 12).setValue(workingHours);
+  logsSheet.getRange(rowIndex, 12).setValue(workingHoursResult);
 
   return { 
     success: true, 
-    message: `บันทึกออกงานสำเร็จ (${workingHours} ชม.)`,
+    message: `บันทึกออกงานสำเร็จ (${workingHoursResult})`,
     logs: getUserLogs(staffId),
     otRequests: getOTRequests(staffId, userRole, siteId)
   };

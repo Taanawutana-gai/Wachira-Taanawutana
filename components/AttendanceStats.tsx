@@ -7,6 +7,26 @@ interface AttendanceStatsProps {
 }
 
 export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
+  // ฟังก์ชันช่วยในการแปลงข้อความ "X ชม. Y นาที" ให้เป็นตัวเลขชั่วโมง (ทศนิยม)
+  const parseWorkingHours = (value: any): number => {
+    if (!value) return 0;
+    if (typeof value === 'number') return value;
+    const str = String(value);
+    
+    // กรณีเป็นรูปแบบตัวเลขเดิม (เช่น "8.50")
+    if (!isNaN(Number(str))) return parseFloat(str);
+    
+    let totalHours = 0;
+    // ค้นหาตัวเลขหน้า "ชม." และ "นาที"
+    const hourMatch = str.match(/(\d+)\s*ชม/);
+    const minMatch = str.match(/(\d+)\s*นาที/);
+    
+    if (hourMatch) totalHours += parseInt(hourMatch[1], 10);
+    if (minMatch) totalHours += parseInt(minMatch[1], 10) / 60;
+    
+    return totalHours;
+  };
+
   // กรองและประมวลผลข้อมูลสำหรับกราฟ 7 วันล่าสุด
   const processChartData = () => {
     const last7DaysMap: Record<string, { day: string, date: string, hours: number }> = {};
@@ -25,7 +45,7 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
 
     logs.forEach(log => {
       if (log.dateIn && last7DaysMap[log.dateIn]) {
-        last7DaysMap[log.dateIn].hours += parseFloat(log.workingHours || 0);
+        last7DaysMap[log.dateIn].hours += parseWorkingHours(log.workingHours);
       }
     });
 
@@ -38,7 +58,7 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
   // คำนวณสถิติรายเดือน
   const calculateMonthlyStats = () => {
     const now = new Date();
-    const currentMonth = now.getMonth(); // 0-11
+    const currentMonth = now.getMonth(); 
     const currentYear = now.getFullYear();
 
     let totalMonthHours = 0;
@@ -48,7 +68,7 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
       if (log.dateIn) {
         const logDate = new Date(log.dateIn);
         if (logDate.getMonth() === currentMonth && logDate.getFullYear() === currentYear) {
-          const hours = parseFloat(log.workingHours || 0);
+          const hours = parseWorkingHours(log.workingHours);
           totalMonthHours += hours;
           if (hours > 0) {
             workedDaysSet.add(log.dateIn);
@@ -72,7 +92,7 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
 
   return (
     <div className="space-y-4">
-      {/* Summary Cards - สถิติรายเดือน */}
+      {/* Summary Cards */}
       <div className="grid grid-cols-3 gap-3">
         <div className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col items-center">
             <span className="text-[9px] text-slate-400 font-bold uppercase mb-1 text-center leading-tight">Total Hrs<br/>(เดือนนี้)</span>
@@ -88,7 +108,7 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
         </div>
       </div>
 
-      {/* Chart - แสดงแนวโน้มรายสัปดาห์ */}
+      {/* Chart */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 w-full h-64">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6 flex justify-between items-center">
           Weekly Performance
