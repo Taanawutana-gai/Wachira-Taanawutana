@@ -1,12 +1,13 @@
 
 export interface User {
-  username: string;
+  username: string; // This will be the LINE User ID
   password?: string;
   name: string;
   siteId: string;
   role: 'Fixed' | 'Roaming' | 'Supervisor';
   position: string;
   avatarUrl?: string;
+  lineUserId?: string;
 }
 
 export enum LogType {

@@ -4,11 +4,13 @@ import { useState, useEffect } from 'react';
 import { User, LogType, GeoLocationData, OTRequest, OTStatus } from './types';
 import { loginUser, sendClockAction, requestOT, updateOTStatus } from './services/sheetService';
 import { getDailyInsight } from './services/geminiService';
+import { initLiff, getLineProfile, LineProfile } from './services/lineService';
 import { Button } from './components/Button';
 import { AttendanceStats } from './components/AttendanceStats';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [lineProfile, setLineProfile] = useState<LineProfile | null>(null);
   const [logs, setLogs] = useState<any[]>([]);
   const [otRequests, setOtRequests] = useState<OTRequest[]>([]);
   
@@ -22,10 +24,46 @@ const App: React.FC = () => {
   
   const [isOTModalOpen, setIsOTModalOpen] = useState(false);
   
-  // OT Form State
   const [otDate, setOtDate] = useState(new Date().toISOString().split('T')[0]);
   const [otHours, setOtHours] = useState(2);
   const [otReason, setOtReason] = useState("");
+
+  // Initialize LIFF and check if already logged in
+  useEffect(() => {
+    const startLiff = async () => {
+      const ok = await initLiff();
+      if (ok) {
+        // We can check if user is already logged in to LINE and fetch profile
+        // but to avoid unwanted redirects, we usually wait for user action.
+        // However, if inside LIFF browser, they might be logged in already.
+        try {
+          // Non-blocking check
+          // @ts-ignore
+          if (window.liff.isLoggedIn()) {
+            const profile = await getLineProfile();
+            if (profile) {
+              setLineProfile(profile);
+              setUsernameInput(profile.userId);
+            }
+          }
+        } catch (e) {
+          console.log("LIFF check failed", e);
+        }
+      }
+    };
+    startLiff();
+  }, []);
+
+  const handleLineConnect = async () => {
+    setIsLoading(true);
+    const profile = await getLineProfile();
+    if (profile) {
+      setLineProfile(profile);
+      setUsernameInput(profile.userId);
+      setSuccess("เชื่อมต่อ LINE สำเร็จ!");
+    }
+    setIsLoading(false);
+  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,10 +76,10 @@ const App: React.FC = () => {
         setLogs(result.logs || []);
         setOtRequests(result.otRequests || []);
       } else {
-        setError(result.message || "Login failed");
+        setError(result.message || "การเข้าสู่ระบบล้มเหลว ตรวจสอบรหัสพนักงานของคุณ");
       }
     } catch (err) {
-      setError("Network error.");
+      setError("เกิดข้อผิดพลาดในการเชื่อมต่อ กรุณาลองใหม่");
     } finally {
       setIsLoading(false);
     }
@@ -60,19 +98,19 @@ const App: React.FC = () => {
         if (result.success) {
           setLogs(result.logs || []);
           setOtRequests(result.otRequests || []);
-          setSuccess(result.message || "Clocked In");
+          setSuccess(result.message || "บันทึกเข้างานสำเร็จ");
           const insight = await getDailyInsight(user.name, 'in', new Date().toLocaleTimeString());
           setAiInsight(insight);
         } else {
-          setError(result.message || "Clock in failed");
+          setError(result.message || "บันทึกเข้างานไม่สำเร็จ");
         }
         setIsLoading(false);
       }, (err) => {
-        setError("Please enable location services.");
+        setError("กรุณาเปิดการเข้าถึงพิกัด (Location Services)");
         setIsLoading(false);
       });
     } catch (err) {
-      setError("Operation failed.");
+      setError("การดำเนินการล้มเหลว");
       setIsLoading(false);
     }
   };
@@ -90,19 +128,19 @@ const App: React.FC = () => {
         if (result.success) {
           setLogs(result.logs || []);
           setOtRequests(result.otRequests || []);
-          setSuccess(result.message || "Clocked Out");
+          setSuccess(result.message || "บันทึกออกงานสำเร็จ");
           const insight = await getDailyInsight(user.name, 'out', new Date().toLocaleTimeString());
           setAiInsight(insight);
         } else {
-          setError(result.message || "Clock out failed");
+          setError(result.message || "บันทึกออกงานไม่สำเร็จ");
         }
         setIsLoading(false);
       }, (err) => {
-        setError("Please enable location services.");
+        setError("กรุณาเปิดการเข้าถึงพิกัด (Location Services)");
         setIsLoading(false);
       });
     } catch (err) {
-      setError("Operation failed.");
+      setError("การดำเนินการล้มเหลว");
       setIsLoading(false);
     }
   };
@@ -124,10 +162,10 @@ const App: React.FC = () => {
       if (result.success) {
         setOtRequests(result.otRequests || []);
         setIsOTModalOpen(false);
-        setSuccess(result.message || "OT Requested");
+        setSuccess(result.message || "ส่งคำขอ OT เรียบร้อยแล้ว");
         setOtReason("");
       } else {
-        setError(result.message || "Failed to request OT");
+        setError(result.message || "ส่งคำขอ OT ล้มเหลว");
       }
     } catch (err) {
       setError("Network error.");
@@ -150,9 +188,9 @@ const App: React.FC = () => {
       });
       if (result.success) {
         setOtRequests(result.otRequests || []);
-        setSuccess(`OT ${status} successfully`);
+        setSuccess(`ดำเนินการ ${status === OTStatus.APPROVED ? 'อนุมัติ' : 'ปฏิเสธ'} เรียบร้อยแล้ว`);
       } else {
-        setError(result.message || "Update failed");
+        setError(result.message || "การอัปเดตล้มเหลว");
       }
     } catch (err) {
       setError("Network error.");
@@ -164,18 +202,54 @@ const App: React.FC = () => {
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4">
-         <div className="w-full max-w-sm bg-white p-8 rounded-3xl shadow-xl border border-slate-100">
-            <div className="w-16 h-16 bg-blue-600 rounded-2xl mx-auto mb-6 flex items-center justify-center shadow-lg shadow-blue-200">
-              <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+         <div className="w-full max-w-sm bg-white p-8 rounded-[40px] shadow-2xl border border-slate-100 relative overflow-hidden">
+            <div className="absolute top-0 right-0 p-6">
+              <button 
+                onClick={handleLineConnect}
+                className={`p-3 rounded-full transition-all ${lineProfile ? 'bg-green-100 text-green-600 shadow-inner' : 'bg-slate-50 text-slate-400 hover:bg-slate-100 shadow-sm border border-slate-100'}`}
+                title="Connect LINE"
+              >
+                {lineProfile?.pictureUrl ? (
+                  <img src={lineProfile.pictureUrl} className="w-8 h-8 rounded-full border-2 border-green-400" alt="Profile" />
+                ) : (
+                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                )}
+              </button>
             </div>
-            <h1 className="text-3xl font-bold text-center text-slate-800 mb-2">SMC Property</h1>
-            <p className="text-slate-500 text-center mb-8">Attendance & OT System</p>
+
+            <div className="w-20 h-20 bg-blue-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-2xl shadow-blue-200 transform rotate-3 hover:rotate-0 transition-transform">
+              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+            </div>
+            
+            <h1 className="text-3xl font-black text-center text-slate-800 mb-1">GeoClock AI</h1>
+            <p className="text-slate-400 text-center text-sm mb-8 font-medium italic">Secure Attendance System</p>
+            
             <form onSubmit={handleLogin} className="space-y-4">
-              <input type="text" value={usernameInput} onChange={(e) => setUsernameInput(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Username" />
-              <input type="password" value={passwordInput} onChange={(e) => setPasswordInput(e.target.value)} className="w-full px-4 py-3 rounded-xl bg-slate-50 border border-slate-200 focus:ring-2 focus:ring-blue-500 outline-none transition-all" placeholder="Staff ID (Password)" />
-              {error && <div className="text-red-500 text-xs font-medium bg-red-50 p-2 rounded-lg">{error}</div>}
-              <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>Log In</Button>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Username (LINE ID)</label>
+                <input 
+                  type="text" 
+                  value={usernameInput} 
+                  onChange={(e) => setUsernameInput(e.target.value)} 
+                  readOnly={!!lineProfile}
+                  className={`w-full px-5 py-4 rounded-2xl border outline-none transition-all font-semibold ${lineProfile ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50 border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-400'}`} 
+                  placeholder={lineProfile ? usernameInput : "กรุณากดไอคอนเพื่อเชื่อมต่อ LINE"} 
+                />
+              </div>
+              <div className="space-y-1">
+                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Staff ID / Password</label>
+                <input 
+                  type="password" 
+                  value={passwordInput} 
+                  onChange={(e) => setPasswordInput(e.target.value)} 
+                  className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all font-semibold" 
+                  placeholder="กรอกรหัสพนักงาน" 
+                />
+              </div>
+              {error && <div className="text-red-500 text-[11px] font-bold bg-red-50 p-3 rounded-xl border border-red-100 animate-pulse">{error}</div>}
+              <Button type="submit" variant="primary" fullWidth className="py-5 text-lg shadow-blue-300" isLoading={isLoading} disabled={!usernameInput}>Log In</Button>
             </form>
+            <p className="mt-6 text-center text-[10px] text-slate-400 font-bold uppercase tracking-tighter">SMC Property Management Group</p>
          </div>
       </div>
     );
@@ -183,108 +257,118 @@ const App: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
-      <header className="bg-white shadow-sm p-4 sticky top-0 z-10 flex justify-between items-center border-b border-slate-100">
+      <header className="bg-white/80 backdrop-blur-md shadow-sm p-4 sticky top-0 z-10 flex justify-between items-center border-b border-slate-100">
           <div className="flex items-center gap-3">
-             <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white font-bold shadow-md shadow-blue-100">{user.name.charAt(0)}</div>
+             <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-200 overflow-hidden">
+               {lineProfile?.pictureUrl ? (
+                 <img src={lineProfile.pictureUrl} className="w-full h-full object-cover" alt="LINE" />
+               ) : (
+                 <span className="text-white font-bold text-xl">{user.name.charAt(0)}</span>
+               )}
+             </div>
              <div>
-               <h2 className="font-bold text-slate-800 text-sm leading-tight">{user.name}</h2>
-               <p className="text-[10px] text-slate-400 uppercase tracking-wider font-semibold">{user.position} • {user.role} • {user.siteId}</p>
+               <h2 className="font-black text-slate-800 text-sm leading-tight">{user.name}</h2>
+               <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black opacity-70">{user.position} • {user.siteId}</p>
              </div>
           </div>
-          <button onClick={() => setUser(null)} className="text-slate-400 hover:text-red-500 p-2 rounded-lg transition-colors">
+          <button onClick={() => setUser(null)} className="text-slate-300 hover:text-red-500 p-2.5 bg-slate-50 rounded-2xl transition-all hover:bg-red-50">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+              <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path>
             </svg>
           </button>
       </header>
 
       <main className="max-w-xl mx-auto p-4 space-y-6">
         {aiInsight && (
-          <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4 rounded-2xl shadow-lg text-white animate-fade-in">
-            <div className="flex items-center gap-2 mb-1">
-              <svg className="w-4 h-4 text-blue-200" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"></path></svg>
-              <span className="text-[10px] font-bold uppercase tracking-widest text-blue-100">Daily Insight</span>
+          <div className="bg-gradient-to-br from-blue-600 via-indigo-600 to-purple-600 p-5 rounded-[32px] shadow-2xl shadow-blue-200 text-white animate-fade-in relative overflow-hidden group">
+            <div className="absolute -right-4 -top-4 w-24 h-24 bg-white/10 rounded-full blur-2xl group-hover:scale-150 transition-transform"></div>
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-1.5 bg-white/20 rounded-lg">
+                <svg className="w-4 h-4 text-blue-100" fill="currentColor" viewBox="0 0 20 20"><path d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z"></path></svg>
+              </div>
+              <span className="text-[11px] font-black uppercase tracking-[0.2em] text-blue-100">Smart Insight</span>
             </div>
-            <p className="text-sm font-medium italic">" {aiInsight} "</p>
+            <p className="text-lg font-bold leading-tight italic drop-shadow-md">" {aiInsight} "</p>
           </div>
         )}
 
-        {/* Clock In/Out Section */}
-        <section className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100">
-          <div className="grid grid-cols-2 gap-4">
-              <Button onClick={handleClockIn} variant="primary" className="h-28 flex-col text-sm" isLoading={isLoading}>
-                <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-                <span className="text-xl font-bold">Clock In</span>
+        <section className="bg-white p-8 rounded-[40px] shadow-xl shadow-slate-200/50 border border-slate-50">
+          <div className="grid grid-cols-2 gap-6">
+              <Button onClick={handleClockIn} variant="primary" className="h-32 flex-col text-sm rounded-[32px]" isLoading={isLoading}>
+                <div className="p-3 bg-white/20 rounded-2xl mb-2">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                </div>
+                <span className="text-xl font-black">Clock In</span>
               </Button>
-              <Button onClick={handleClockOut} variant="danger" className="h-28 flex-col text-sm" isLoading={isLoading}>
-                <svg className="w-8 h-8 mb-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-                <span className="text-xl font-bold">Clock Out</span>
+              <Button onClick={handleClockOut} variant="danger" className="h-32 flex-col text-sm rounded-[32px]" isLoading={isLoading}>
+                <div className="p-3 bg-white/20 rounded-2xl mb-2">
+                  <svg className="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                </div>
+                <span className="text-xl font-black">Clock Out</span>
               </Button>
           </div>
         </section>
 
-        {/* Overtime (OT) Section */}
         <section className="space-y-4">
-          <div className="flex justify-between items-center px-1">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Overtime Management</h3>
+          <div className="flex justify-between items-center px-2">
+            <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Active Requests</h3>
             <button 
               onClick={() => setIsOTModalOpen(true)} 
-              className="text-xs font-bold text-blue-600 bg-blue-50 px-4 py-2 rounded-full hover:bg-blue-100 transition-colors flex items-center gap-1 shadow-sm"
+              className="text-[11px] font-black text-blue-600 bg-blue-50 px-5 py-2.5 rounded-full hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2 shadow-sm active:scale-95"
             >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-              Request OT
+              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+              REQUEST OT
             </button>
           </div>
           
-          <div className="space-y-3">
+          <div className="space-y-4">
             {otRequests.length === 0 ? (
-              <div className="bg-white p-10 rounded-3xl text-center text-slate-400 text-sm border border-dashed border-slate-200">
-                <svg className="w-12 h-12 mx-auto mb-3 opacity-20" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-                No active OT requests found
+              <div className="bg-white p-12 rounded-[40px] text-center text-slate-400 text-sm border-2 border-dashed border-slate-100">
+                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <svg className="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                </div>
+                <p className="font-bold tracking-tight">ไม่พบคำขอที่อยู่ระหว่างดำเนินการ</p>
               </div>
             ) : (
               otRequests.map(req => (
-                <div key={req.id} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex justify-between items-start transition-all hover:shadow-md">
+                <div key={req.id} className="bg-white p-5 rounded-[32px] shadow-lg shadow-slate-100/50 border border-slate-50 flex justify-between items-start transition-all hover:translate-y-[-2px]">
                   <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                       <span className="text-sm font-bold text-slate-700">{req.date}</span>
-                       <span className="bg-slate-100 text-slate-600 text-[10px] font-bold px-2 py-0.5 rounded-md">{req.hours} Hrs</span>
+                    <div className="flex items-center gap-2 mb-1">
+                       <span className="text-sm font-black text-slate-800">{req.date}</span>
+                       <span className="bg-blue-50 text-blue-600 text-[9px] font-black px-2.5 py-1 rounded-lg uppercase tracking-wider">{req.hours} Hrs</span>
                     </div>
-                    <p className="text-xs text-slate-500 leading-relaxed max-w-[200px]">{req.reason}</p>
+                    <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[210px]">{req.reason}</p>
                     {user.role === 'Supervisor' && (
-                       <div className="flex items-center gap-1 mt-2">
-                         <div className="w-5 h-5 rounded-full bg-blue-50 flex items-center justify-center text-[10px] font-bold text-blue-600">{req.name.charAt(0)}</div>
-                         <span className="text-[10px] text-blue-600 font-bold tracking-tight">From: {req.name}</span>
+                       <div className="flex items-center gap-2 mt-3 p-1.5 bg-slate-50 rounded-2xl w-fit">
+                         <div className="w-6 h-6 rounded-xl bg-blue-600 flex items-center justify-center text-[10px] font-black text-white shadow-sm">{req.name.charAt(0)}</div>
+                         <span className="text-[10px] text-slate-600 font-black tracking-tight">{req.name}</span>
                        </div>
                     )}
                   </div>
-                  <div className="flex flex-col items-end gap-3">
-                    <span className={`text-[9px] font-black px-3 py-1 rounded-full uppercase tracking-tighter shadow-sm border ${
+                  <div className="flex flex-col items-end gap-4">
+                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm border-2 ${
                       req.status === 'Approved' ? 'bg-green-50 text-green-600 border-green-100' :
-                      req.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-yellow-50 text-yellow-600 border-yellow-100'
+                      req.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-yellow-50 text-yellow-600 border-yellow-100 animate-pulse'
                     }`}>
-                      {req.status}
+                      {req.status === 'Approved' ? 'อนุมัติแล้ว' : req.status === 'Rejected' ? 'ปฏิเสธ' : 'รออนุมัติ'}
                     </span>
                     {user.role === 'Supervisor' && req.status === 'Pending' && (
                       <div className="flex gap-2">
                         <button 
                           onClick={() => handleApproveReject(req.id, OTStatus.APPROVED)} 
-                          className="p-2 bg-green-50 text-green-600 hover:bg-green-100 rounded-xl transition-colors shadow-sm"
+                          className="p-3 bg-green-500 text-white hover:bg-green-600 rounded-2xl transition-all shadow-lg shadow-green-100 active:scale-90"
                           title="Approve"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
                         </button>
                         <button 
                           onClick={() => handleApproveReject(req.id, OTStatus.REJECTED)} 
-                          className="p-2 bg-red-50 text-red-600 hover:bg-red-100 rounded-xl transition-colors shadow-sm"
+                          className="p-3 bg-red-500 text-white hover:bg-red-600 rounded-2xl transition-all shadow-lg shadow-red-100 active:scale-90"
                           title="Reject"
                         >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
                         </button>
                       </div>
-                    )}
-                    {req.status !== 'Pending' && req.approverName && (
-                      <span className="text-[8px] text-slate-400 italic">By: {req.approverName}</span>
                     )}
                   </div>
                 </div>
@@ -293,45 +377,46 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        {/* Statistics Section */}
         <section>
-          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4 ml-1">Weekly Performance</h3>
+          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 ml-2">Weekly Performance</h3>
           <AttendanceStats logs={logs} />
         </section>
       </main>
 
       {/* OT Request Modal */}
       {isOTModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-[32px] shadow-2xl w-full max-w-sm p-8 space-y-6 animate-scale-in">
-            <div className="flex justify-between items-center">
-              <h3 className="text-2xl font-bold text-slate-800">Request OT</h3>
-              <button onClick={() => setIsOTModalOpen(false)} className="text-slate-400 hover:text-slate-600 transition-colors p-2 bg-slate-50 rounded-full">
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-              </button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-fade-in">
+          <div className="bg-white rounded-[48px] shadow-2xl w-full max-w-sm p-10 space-y-8 animate-scale-in relative border border-slate-100">
+            <button onClick={() => setIsOTModalOpen(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600 transition-colors p-2 bg-slate-50 rounded-2xl">
+              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+            </button>
+            
+            <div className="space-y-2">
+              <h3 className="text-3xl font-black text-slate-800">New Request</h3>
+              <p className="text-slate-400 font-medium text-sm">กรุณากรอกรายละเอียดการทำ OT</p>
             </div>
-            <form onSubmit={handleOTRequestSubmit} className="space-y-5">
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">OT Date</label>
-                <input type="date" value={otDate} onChange={(e) => setOtDate(e.target.value)} className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium" required />
+
+            <form onSubmit={handleOTRequestSubmit} className="space-y-6">
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">วันที่ปฏิบัติงาน</label>
+                <input type="date" value={otDate} onChange={(e) => setOtDate(e.target.value)} className="w-full px-6 py-4 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold" required />
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Estimated Hours</label>
-                <input type="number" step="0.5" value={otHours} onChange={(e) => setOtHours(parseFloat(e.target.value))} className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium" required />
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">จำนวนชั่วโมง (ประมาณการ)</label>
+                <input type="number" step="0.5" value={otHours} onChange={(e) => setOtHours(parseFloat(e.target.value))} className="w-full px-6 py-4 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold" required />
               </div>
-              <div className="space-y-1.5">
-                <label className="block text-xs font-bold text-slate-400 uppercase tracking-wider ml-1">Reason / Task</label>
+              <div className="space-y-2">
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">รายละเอียด / เหตุผล</label>
                 <textarea 
                   value={otReason} 
                   onChange={(e) => setOtReason(e.target.value)} 
-                  className="w-full px-5 py-3.5 rounded-2xl bg-slate-50 border border-slate-200 outline-none focus:ring-2 focus:ring-blue-500 transition-all font-medium h-32 resize-none" 
-                  placeholder="What will you be working on?" 
+                  className="w-full px-6 py-5 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold h-36 resize-none" 
+                  placeholder="คุณกำลังจะทำงานอะไร?" 
                   required
                 ></textarea>
               </div>
-              <div className="flex gap-4 pt-2">
-                <Button type="button" variant="outline" fullWidth onClick={() => setIsOTModalOpen(false)}>Cancel</Button>
-                <Button type="submit" variant="primary" fullWidth isLoading={isLoading}>Submit Request</Button>
+              <div className="flex gap-4 pt-4">
+                <Button type="submit" variant="primary" fullWidth className="py-5 text-lg" isLoading={isLoading}>ส่งคำขอ</Button>
               </div>
             </form>
           </div>
@@ -340,28 +425,28 @@ const App: React.FC = () => {
 
       {/* Floating Notifications */}
       {(success || error) && (
-        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 px-6 py-4 rounded-2xl shadow-2xl z-50 text-white font-bold text-sm flex items-center gap-3 min-w-[300px] transition-all transform animate-bounce-short ${success ? 'bg-green-600' : 'bg-red-600'}`}>
-          <div className="w-6 h-6 rounded-full bg-white/20 flex items-center justify-center">
+        <div className={`fixed bottom-10 left-1/2 -translate-x-1/2 px-8 py-5 rounded-[28px] shadow-2xl z-50 text-white font-black text-sm flex items-center gap-4 min-w-[320px] transition-all transform animate-bounce-short border-4 border-white/20 ${success ? 'bg-green-500' : 'bg-red-500'}`}>
+          <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center">
             {success ? (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"></path></svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"></path></svg>
             )}
           </div>
-          <span className="flex-1">{success || error}</span>
-          <button onClick={() => {setSuccess(null); setError(null)}} className="hover:opacity-70 transition-opacity">
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+          <span className="flex-1 uppercase tracking-tight">{success || error}</span>
+          <button onClick={() => {setSuccess(null); setError(null)}} className="hover:scale-125 transition-transform p-1">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg>
           </button>
         </div>
       )}
 
       <style>{`
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes scale-in { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
-        @keyframes bounce-short { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -10px); } }
-        .animate-fade-in { animation: fade-in 0.3s ease-out; }
-        .animate-scale-in { animation: scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); }
-        .animate-bounce-short { animation: bounce-short 1s ease-in-out infinite; }
+        @keyframes scale-in { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+        @keyframes bounce-short { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -15px); } }
+        .animate-fade-in { animation: fade-in 0.4s ease-out; }
+        .animate-scale-in { animation: scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .animate-bounce-short { animation: bounce-short 2s ease-in-out infinite; }
       `}</style>
     </div>
   );
