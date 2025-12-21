@@ -9,22 +9,23 @@ interface AttendanceStatsProps {
 export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
   // ฟังก์ชันช่วยในการแปลงข้อความ "X ชม. Y นาที" ให้เป็นตัวเลขชั่วโมง (ทศนิยม)
   const parseWorkingHours = (value: any): number => {
-    if (!value) return 0;
-    if (typeof value === 'number') return value;
+    if (!value || value === "NaN นาที" || value === "ERR") return 0;
+    if (typeof value === 'number') return isNaN(value) ? 0 : value;
+    
     const str = String(value);
     
     // กรณีเป็นรูปแบบตัวเลขเดิม (เช่น "8.50")
     if (!isNaN(Number(str))) return parseFloat(str);
     
     let totalHours = 0;
-    // ค้นหาตัวเลขหน้า "ชม." และ "นาที"
+    // ค้นหาตัวเลขหน้า "ชม." และ "นาที" โดยข้ามคำว่า NaN
     const hourMatch = str.match(/(\d+)\s*ชม/);
     const minMatch = str.match(/(\d+)\s*นาที/);
     
     if (hourMatch) totalHours += parseInt(hourMatch[1], 10);
     if (minMatch) totalHours += parseInt(minMatch[1], 10) / 60;
     
-    return totalHours;
+    return isNaN(totalHours) ? 0 : totalHours;
   };
 
   // กรองและประมวลผลข้อมูลสำหรับกราฟ 7 วันล่าสุด
@@ -45,7 +46,8 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
 
     logs.forEach(log => {
       if (log.dateIn && last7DaysMap[log.dateIn]) {
-        last7DaysMap[log.dateIn].hours += parseWorkingHours(log.workingHours);
+        const hours = parseWorkingHours(log.workingHours);
+        last7DaysMap[log.dateIn].hours += hours;
       }
     });
 

@@ -1,11 +1,6 @@
 
 /**
  * GEO CLOCK AI - BACKEND (With OT Approval System & Geofencing)
- * 
- * LOGS STRUCTURE: A: Staff_ID, ..., L: Working_Hours
- * OT_REQUESTS STRUCTURE: A: Request_ID, B: Staff_ID, C: Name, D: Site_ID, E: Date, F: Reason, G: Hours, H: Status, I: Approver, J: Timestamp
- * EMPLOY_DB STRUCTURE: A: Username, B: Password/Staff_ID, C: Name, D: Site_ID, E: Role, F: Position
- * SITE_CONFIG STRUCTURE: A: Site_ID, B: Site_Name, C: Lat, D: Lng, E: Radius
  */
 
 const SHEET_EMPLOY_DB = "Employ_DB";
@@ -161,9 +156,9 @@ function getUserLogs(staffId) {
       staffId: row[0],
       name: row[1],
       dateIn: row[2] instanceof Date ? Utilities.formatDate(row[2], TIMEZONE, "yyyy-MM-dd") : row[2],
-      timeIn: row[3],
-      dateOut: row[6],
-      timeOut: row[7],
+      timeIn: row[3] instanceof Date ? Utilities.formatDate(row[3], TIMEZONE, "HH:mm:ss") : row[3],
+      dateOut: row[6] instanceof Date ? Utilities.formatDate(row[6], TIMEZONE, "yyyy-MM-dd") : row[6],
+      timeOut: row[7] instanceof Date ? Utilities.formatDate(row[7], TIMEZONE, "HH:mm:ss") : row[7],
       workingHours: row[11] || "0 นาที"
     }));
 }
@@ -229,7 +224,7 @@ function handleClockOut(data) {
   const logs = logsSheet.getDataRange().getValues();
   let rowIndex = -1;
   for (let i = logs.length - 1; i >= 1; i--) {
-    if (String(logs[i][0]) === staffId && String(logs[i][7]) === "") {
+    if (String(logs[i][0]) === staffId && (logs[i][7] === "" || logs[i][7] == null)) {
       rowIndex = i + 1;
       break;
     }
@@ -242,24 +237,26 @@ function handleClockOut(data) {
   
   let workingHoursResult = "0 นาที";
   try {
-    const dateInVal = logs[rowIndex-1][2];
-    const timeInVal = logs[rowIndex-1][3];
+    const rowData = logs[rowIndex-1];
+    const dateInVal = rowData[2];
+    const timeInVal = rowData[3];
+    
+    // จัดการ Date/Time ให้เป็น String ที่แน่นอนก่อนคำนวณ
     const dateInStr = dateInVal instanceof Date ? Utilities.formatDate(dateInVal, TIMEZONE, "yyyy-MM-dd") : String(dateInVal);
-    const startTime = new Date(dateInStr + "T" + String(timeInVal));
+    const timeInStr = timeInVal instanceof Date ? Utilities.formatDate(timeInVal, TIMEZONE, "HH:mm:ss") : String(timeInVal);
+    
+    // สร้าง Date Object สำหรับคำนวณ Ms
+    const startTime = new Date(dateInStr.split('T')[0] + "T" + timeInStr);
     const diffMs = now.getTime() - startTime.getTime();
     
-    // คำนวณเป็นนาทีและปัดเศษ
-    const totalMinutes = Math.round(diffMs / (1000 * 60));
-    const h = Math.floor(totalMinutes / 60);
-    const m = totalMinutes % 60;
-    
-    if (h > 0) {
-      workingHoursResult = h + " ชม. " + m + " นาที";
-    } else {
-      workingHoursResult = m + " นาที";
+    if (!isNaN(diffMs)) {
+      const totalMinutes = Math.round(diffMs / (1000 * 60));
+      const h = Math.floor(totalMinutes / 60);
+      const m = totalMinutes % 60;
+      workingHoursResult = h > 0 ? h + " ชม. " + m + " นาที" : m + " นาที";
     }
   } catch (e) {
-    workingHoursResult = "ERR";
+    workingHoursResult = "0 นาที";
   }
 
   logsSheet.getRange(rowIndex, 7).setValue(dateOutStr);
