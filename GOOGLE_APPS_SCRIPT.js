@@ -193,13 +193,36 @@ function handleClockOut(data) {
   const dateOutStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
   const timeOutStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
   
+  // คำนวณชั่วโมงทำงานจริง
+  let workingHours = "0.00";
+  try {
+    const dateInVal = logs[rowIndex-1][2];
+    const timeInVal = logs[rowIndex-1][3];
+    
+    const dateInStr = dateInVal instanceof Date ? Utilities.formatDate(dateInVal, TIMEZONE, "yyyy-MM-dd") : String(dateInVal);
+    const timeInStr = String(timeInVal);
+    
+    const startTime = new Date(dateInStr + "T" + timeInStr);
+    const diffMs = now.getTime() - startTime.getTime();
+    const diffHrs = diffMs / (1000 * 60 * 60);
+    
+    if (diffHrs > 0) {
+      workingHours = diffHrs.toFixed(2);
+    }
+  } catch (e) {
+    console.error("Error calculating working hours: " + e.toString());
+    workingHours = "ERR";
+  }
+
   logsSheet.getRange(rowIndex, 7).setValue(dateOutStr);
   logsSheet.getRange(rowIndex, 8).setValue(timeOutStr);
-  logsSheet.getRange(rowIndex, 12).setValue("8.00");
+  logsSheet.getRange(rowIndex, 9).setValue(latitude);
+  logsSheet.getRange(rowIndex, 10).setValue(longitude);
+  logsSheet.getRange(rowIndex, 12).setValue(workingHours);
 
   return { 
     success: true, 
-    message: `บันทึกออกงานสำเร็จ`,
+    message: `บันทึกออกงานสำเร็จ (${workingHours} ชม.)`,
     logs: getUserLogs(staffId),
     otRequests: getOTRequests(staffId, userRole, siteId)
   };
