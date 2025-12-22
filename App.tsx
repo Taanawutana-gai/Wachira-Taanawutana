@@ -223,7 +223,7 @@ const App: React.FC = () => {
               <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
             </div>
             
-            <h1 className="text-3xl font-black text-center text-slate-800 mb-1">GeoClock AI</h1>
+            <h1 className="text-3xl font-black text-center text-slate-800 mb-1">GeoClock</h1>
             <p className="text-slate-400 text-center text-sm mb-8 font-medium italic">Secure Attendance System</p>
             
             <form onSubmit={handleLogin} className="space-y-4">

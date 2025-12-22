@@ -1,5 +1,5 @@
 {
-  "name": "GeoClock AI",
+  "name": "GeoClock",
   "description": "A smart employee attendance system with geolocation tracking and AI-powered daily insights.",
   "requestFramePermissions": [
     "geolocation"
