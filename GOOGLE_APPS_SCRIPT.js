@@ -64,7 +64,6 @@ function getOTRequests(staffId, role, siteId) {
   
   return data
     .filter(row => {
-      // คอลัมน์ E (Site_ID) คือ index 4, คอลัมน์ I (Status) คือ index 8
       if (role === 'Supervisor') {
         return String(row[4]) === String(siteId) || row[8] === "Pending";
       }
@@ -115,7 +114,6 @@ function handleRequestOT(data) {
   const sheet = ss.getSheetByName(SHEET_OT_REQUESTS);
   const requestId = "OT-" + Utilities.formatDate(new Date(), TIMEZONE, "yyyyMMdd-HHmmss") + "-" + staffId;
   
-  // A: Timestamp, B: Request_ID, C: Staff_ID, D: Name, E: Site_ID, F: Reason, G: OT_Start, H: OT_End, I: Status, J: Approver
   sheet.appendRow([new Date(), requestId, staffId, name, siteId, reason, startTime, endTime, "Pending", ""]);
   
   return { 
@@ -132,10 +130,9 @@ function handleUpdateOTStatus(data) {
   const rows = sheet.getDataRange().getValues();
   
   for (let i = 1; i < rows.length; i++) {
-    // Request_ID อยู่คอลัมน์ B (index 1)
     if (String(rows[i][1]) === String(requestId)) {
-      sheet.getRange(i + 1, 9).setValue(status);  // Status อยู่คอลัมน์ I (index 9)
-      sheet.getRange(i + 1, 10).setValue(approverName); // Approver อยู่คอลัมน์ J (index 10)
+      sheet.getRange(i + 1, 9).setValue(status);
+      sheet.getRange(i + 1, 10).setValue(approverName);
       break;
     }
   }
@@ -191,7 +188,7 @@ function handleClockIn(data) {
   
   const staffId = String(userRow[1]); 
   const siteId = userRow[3];
-  const userRole = userRole = userRow[4];
+  const userRole = userRow[4]; // แก้ไขจาก const userRole = userRole = userRow[4];
 
   const locationCheck = validateLocation(userRole, siteId, latitude, longitude);
   if (!locationCheck.allowed) return { success: false, message: locationCheck.message };
