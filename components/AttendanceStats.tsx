@@ -113,7 +113,7 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
       {/* Chart */}
       <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 w-full h-64">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6 flex justify-between items-center">
-          Monthly Stats
+          weekly performance
           <span className="text-[10px] font-normal normal-case bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">7 วันล่าสุด</span>
         </h3>
         <ResponsiveContainer width="100%" height="100%">

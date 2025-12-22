@@ -384,7 +384,7 @@ const App: React.FC = () => {
         </section>
 
         <section>
-          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 ml-2">Weekly Performance</h3>
+          <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 ml-2">Monthly Stats</h3>
           <AttendanceStats logs={logs} />
         </section>
       </main>
