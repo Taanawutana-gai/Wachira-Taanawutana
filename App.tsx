@@ -258,7 +258,7 @@ const App: React.FC = () => {
                     value={passwordInput} 
                     onChange={(e) => setPasswordInput(e.target.value)} 
                     className="w-full bg-transparent outline-none text-slate-800 font-black text-xl tracking-tight placeholder:text-slate-200" 
-                    placeholder="2624" 
+                    placeholder="รหัสพนักงาน" 
                   />
                 </div>
               </div>
