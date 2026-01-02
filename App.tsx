@@ -24,7 +24,6 @@ const App: React.FC = () => {
   
   const [isOTModalOpen, setIsOTModalOpen] = useState(false);
   
-  // Set default start time to today at 18:00
   const defaultStart = new Date();
   defaultStart.setHours(18, 0, 0, 0);
   const defaultEnd = new Date();
@@ -34,7 +33,6 @@ const App: React.FC = () => {
   const [otEndTime, setOtEndTime] = useState(defaultEnd.toISOString().slice(0, 16));
   const [otReason, setOtReason] = useState("");
 
-  // Initialize LIFF and check if already logged in
   useEffect(() => {
     const startLiff = async () => {
       const ok = await initLiff();
@@ -203,55 +201,87 @@ const App: React.FC = () => {
 
   if (!user) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-4">
-         <div className="w-full max-w-sm bg-white p-8 rounded-[40px] shadow-2xl border border-slate-100 relative overflow-hidden">
-            <div className="absolute top-0 right-0 p-6">
-              <button 
-                onClick={handleLineConnect}
-                className={`p-3 rounded-full transition-all ${lineProfile ? 'bg-green-100 text-green-600 shadow-inner' : 'bg-slate-50 text-slate-400 hover:bg-slate-100 shadow-sm border border-slate-100'}`}
-                title="Connect LINE"
-              >
-                {lineProfile?.pictureUrl ? (
-                  <img src={lineProfile.pictureUrl} className="w-8 h-8 rounded-full border-2 border-green-400" alt="Profile" />
-                ) : (
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-                )}
-              </button>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white px-6">
+         <div className="w-full max-w-sm bg-white p-10 pt-16 rounded-[60px] shadow-[0_35px_60px_-15px_rgba(0,0,0,0.1)] relative border border-slate-50">
+            
+            {/* Profile Section */}
+            <div className="flex flex-col items-center mb-8 relative">
+              <div className="relative inline-block group cursor-pointer" onClick={handleLineConnect}>
+                <div className="w-28 h-28 rounded-[36px] overflow-hidden border-4 border-white shadow-xl bg-slate-100 flex items-center justify-center">
+                  {lineProfile?.pictureUrl ? (
+                    <img src={lineProfile.pictureUrl} className="w-full h-full object-cover" alt="Profile" />
+                  ) : (
+                    <svg className="w-12 h-12 text-slate-300" fill="currentColor" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>
+                  )}
+                </div>
+                {/* Verified Icon */}
+                <div className="absolute -bottom-1 -right-1 bg-blue-600 rounded-xl p-1.5 border-4 border-white shadow-lg">
+                  <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M2.166 4.9L9.03 1.05a2 2 0 011.939 0L17.833 4.9a2 2 0 011.167 1.787V11a8.96 8.96 0 01-2.341 6.023 2 2 0 01-2.261.439l-4.031-2.02a2 2 0 00-1.794 0l-4.031 2.02a2 2 0 01-2.261-.439A8.96 8.96 0 011 11V6.687c0-.737.405-1.41 1.166-1.787zM13.707 8.707a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                </div>
+              </div>
+              
+              <h1 className="text-3xl font-black text-slate-800 mt-6 mb-1 tracking-tight">GeoClock</h1>
+              <p className="text-slate-400 text-sm font-medium italic">SMC Attendance System</p>
             </div>
+            
+            <form onSubmit={handleLogin} className="space-y-6">
+              {/* USE ID Field */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 ml-1">
+                  <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">USE ID</label>
+                </div>
+                <div className="bg-[#f1f6ff] rounded-[24px] px-6 py-5 border border-slate-100/50">
+                  <input 
+                    type="text" 
+                    value={usernameInput} 
+                    onChange={(e) => setUsernameInput(e.target.value)} 
+                    readOnly={!!lineProfile}
+                    className="w-full bg-transparent outline-none text-slate-500 font-bold text-sm truncate" 
+                    placeholder="กรุณาเชื่อมต่อ LINE" 
+                  />
+                </div>
+              </div>
 
-            <div className="w-20 h-20 bg-blue-600 rounded-3xl mx-auto mb-6 flex items-center justify-center shadow-2xl shadow-blue-200 transform rotate-3 hover:rotate-0 transition-transform">
-              <svg className="w-10 h-10 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-            </div>
-            
-            <h1 className="text-3xl font-black text-center text-slate-800 mb-1">GeoClock</h1>
-            <p className="text-slate-400 text-center text-sm mb-8 font-medium italic">SMC Attendance System</p>
-            
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">User ID</label>
-                <input 
-                  type="text" 
-                  value={usernameInput} 
-                  onChange={(e) => setUsernameInput(e.target.value)} 
-                  readOnly={!!lineProfile}
-                  className={`w-full px-5 py-4 rounded-2xl border outline-none transition-all font-semibold ${lineProfile ? 'bg-slate-100 border-slate-200 text-slate-500 cursor-not-allowed' : 'bg-slate-50 border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-400'}`} 
-                  placeholder={lineProfile ? usernameInput : "กรุณากดไอคอนเพื่อเชื่อมต่อ LINE"} 
-                />
+              {/* STAFF ID Field */}
+              <div className="space-y-2">
+                <div className="flex items-center gap-2 ml-1">
+                  <svg className="w-3.5 h-3.5 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-[0.15em]">STAFF ID</label>
+                </div>
+                <div className="bg-white rounded-[24px] px-6 py-7 border-2 border-slate-50 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex items-center gap-3">
+                  <span className="text-slate-300 text-2xl font-light">#</span>
+                  <input 
+                    type="text" 
+                    value={passwordInput} 
+                    onChange={(e) => setPasswordInput(e.target.value)} 
+                    className="w-full bg-transparent outline-none text-slate-800 font-black text-2xl tracking-tight placeholder:text-slate-200" 
+                    placeholder="2624" 
+                  />
+                </div>
               </div>
-              <div className="space-y-1">
-                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Staff ID</label>
-                <input 
-                  type="text" 
-                  value={passwordInput} 
-                  onChange={(e) => setPasswordInput(e.target.value)} 
-                  className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all font-semibold" 
-                  placeholder="กรอกรหัสพนักงาน" 
-                />
-              </div>
-              {error && <div className="text-red-500 text-[11px] font-bold bg-red-50 p-3 rounded-xl border border-red-100 animate-pulse">{error}</div>}
-              <Button type="submit" variant="primary" fullWidth className="py-5 text-lg shadow-blue-300" isLoading={isLoading} disabled={!usernameInput}>Log In</Button>
+
+              {error && <div className="text-red-500 text-[11px] font-bold bg-red-50 p-3 rounded-xl border border-red-100">{error}</div>}
+
+              {/* Login Button */}
+              <Button 
+                type="submit" 
+                variant="primary" 
+                fullWidth 
+                className="py-6 rounded-[28px] text-lg font-black shadow-2xl shadow-blue-200 uppercase tracking-widest gap-3" 
+                isLoading={isLoading} 
+                disabled={!usernameInput}
+              >
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+                </svg>
+                Login
+              </Button>
             </form>
-            <p className="mt-6 text-center text-[10px] text-slate-400 font-bold uppercase tracking-tighter">Management By SMC Property Soft</p>
+            
+            <p className="mt-10 text-center text-[10px] text-slate-300 font-black uppercase tracking-widest">Management By SMC Property Soft</p>
          </div>
       </div>
     );
@@ -273,7 +303,7 @@ const App: React.FC = () => {
                <p className="text-[10px] text-slate-400 uppercase tracking-widest font-black opacity-70">{user.position} • {user.siteId}</p>
              </div>
           </div>
-          <button onClick={() => setUser(null)} className="text-slate-300 hover:text-red-500 p-2.5 bg-slate-50 rounded-2xl transition-all hover:bg-red-50">
+          <button onClick={() => {setUser(null); setLineProfile(null);}} className="text-slate-300 hover:text-red-500 p-2.5 bg-slate-50 rounded-2xl transition-all hover:bg-red-50">
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path>
             </svg>
@@ -463,7 +493,7 @@ const App: React.FC = () => {
         @keyframes scale-in { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         @keyframes bounce-short { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -15px); } }
         .animate-fade-in { animation: fade-in 0.4s ease-out; }
-        .animate-scale-in { animation: scale-in 0.5: cubic-bezier(0.34, 1.56, 0.64, 1); }
+        .animate-scale-in { animation: scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .animate-bounce-short { animation: bounce-short 2s ease-in-out infinite; }
       `}</style>
     </div>
