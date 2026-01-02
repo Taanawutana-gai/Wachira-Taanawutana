@@ -224,7 +224,7 @@ const App: React.FC = () => {
             </div>
             
             <h1 className="text-3xl font-black text-center text-slate-800 mb-1">GeoClock</h1>
-            <p className="text-slate-400 text-center text-sm mb-8 font-medium italic">Secure Attendance System</p>
+            <p className="text-slate-400 text-center text-sm mb-8 font-medium italic">SMC Attendance System</p>
             
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-1">
@@ -241,7 +241,7 @@ const App: React.FC = () => {
               <div className="space-y-1">
                 <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Staff ID</label>
                 <input 
-                  type="password" 
+                  type="text" 
                   value={passwordInput} 
                   onChange={(e) => setPasswordInput(e.target.value)} 
                   className="w-full px-5 py-4 rounded-2xl bg-slate-50 border border-slate-200 focus:ring-4 focus:ring-blue-100 focus:border-blue-400 outline-none transition-all font-semibold" 
