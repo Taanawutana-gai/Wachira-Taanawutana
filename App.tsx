@@ -88,12 +88,20 @@ const App: React.FC = () => {
   const handleClockIn = async () => {
     if (!user) return;
 
-    // ตรวจสอบการบันทึกซ้ำในวันปัจจุบัน (Client-side check)
-    const today = new Date().toLocaleDateString('en-CA'); // yyyy-mm-dd
-    const alreadyIn = logs.some(log => log.dateIn === today);
-    if (alreadyIn) {
-      setError("คุณได้บันทึกเข้างานไปแล้วในวันนี้");
-      return;
+    // ตรวจสอบการบันทึกซ้ำภายใน 12 ชั่วโมง (Client-side check)
+    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+    const now = new Date();
+    
+    const lastLog = logs[logs.length - 1];
+    if (lastLog && lastLog.dateIn && lastLog.timeIn) {
+      const lastClockIn = new Date(`${lastLog.dateIn}T${lastLog.timeIn}`);
+      if (!isNaN(lastClockIn.getTime())) {
+        const diff = now.getTime() - lastClockIn.getTime();
+        if (diff < TWELVE_HOURS_MS) {
+          setError("คุณได้บันทึกเข้างานไปแล้วในช่วง 12 ชั่วโมงที่ผ่านมา");
+          return;
+        }
+      }
     }
 
     setIsLoading(true);

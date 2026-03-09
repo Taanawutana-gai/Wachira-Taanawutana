@@ -199,13 +199,40 @@ function handleClockIn(data) {
   const dateStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
   const timeStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
 
-  // ตรวจสอบการบันทึกซ้ำในวันปัจจุบัน
-  for (let i = 1; i < logsData.length; i++) {
+  // ตรวจสอบการบันทึกซ้ำภายใน 12 ชั่วโมง
+  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+  for (let i = logsData.length - 1; i >= 1; i--) {
     const row = logsData[i];
     const rowStaffId = String(row[0]);
-    const rowDate = row[2] instanceof Date ? Utilities.formatDate(row[2], TIMEZONE, "yyyy-MM-dd") : String(row[2]);
-    if (rowStaffId === staffId && rowDate === dateStr) {
-      return { success: false, message: "คุณได้บันทึกเข้างานไปแล้วในวันนี้" };
+    if (rowStaffId === staffId) {
+      const rowDate = row[2];
+      const rowTime = row[3];
+      
+      let lastClockIn;
+      if (rowDate instanceof Date && rowTime instanceof Date) {
+        // กรณีเป็น Date object จาก Google Sheets
+        const dStr = Utilities.formatDate(rowDate, TIMEZONE, "yyyy-MM-dd");
+        const tStr = Utilities.formatDate(rowTime, TIMEZONE, "HH:mm:ss");
+        lastClockIn = new Date(dStr + "T" + tStr);
+      } else {
+        // กรณีเป็น string
+        lastClockIn = new Date(String(row[2]).split('T')[0] + "T" + String(row[3]));
+      }
+
+      if (!isNaN(lastClockIn.getTime())) {
+        const diff = now.getTime() - lastClockIn.getTime();
+        if (diff < TWELVE_HOURS_MS) {
+          const remainingMs = TWELVE_HOURS_MS - diff;
+          const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+          const remainingMins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+          return { 
+            success: false, 
+            message: `คุณได้บันทึกเข้างานไปแล้วเมื่อ ${remainingHours} ชม. ${remainingMins} นาทีที่ผ่านมา (กรุณารอให้ครบ 12 ชม.)` 
+          };
+        }
+      }
+      // ตรวจสอบเฉพาะรายการล่าสุดของพนักงานคนนี้
+      break;
     }
   }
 
