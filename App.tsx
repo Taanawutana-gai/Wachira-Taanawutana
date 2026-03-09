@@ -87,6 +87,15 @@ const App: React.FC = () => {
 
   const handleClockIn = async () => {
     if (!user) return;
+
+    // ตรวจสอบการบันทึกซ้ำในวันปัจจุบัน (Client-side check)
+    const today = new Date().toLocaleDateString('en-CA'); // yyyy-mm-dd
+    const alreadyIn = logs.some(log => log.dateIn === today);
+    if (alreadyIn) {
+      setError("คุณได้บันทึกเข้างานไปแล้วในวันนี้");
+      return;
+    }
+
     setIsLoading(true);
     try {
       navigator.geolocation.getCurrentPosition(async (pos) => {

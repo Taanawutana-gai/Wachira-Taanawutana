@@ -188,15 +188,27 @@ function handleClockIn(data) {
   
   const staffId = String(userRow[1]); 
   const siteId = userRow[3];
-  const userRole = userRow[4]; // แก้ไขจาก const userRole = userRole = userRow[4];
+  const userRole = userRow[4];
 
   const locationCheck = validateLocation(userRole, siteId, latitude, longitude);
   if (!locationCheck.allowed) return { success: false, message: locationCheck.message };
   
   const logsSheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(SHEET_LOGS);
+  const logsData = logsSheet.getDataRange().getValues();
   const now = new Date();
   const dateStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
   const timeStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
+
+  // ตรวจสอบการบันทึกซ้ำในวันปัจจุบัน
+  for (let i = 1; i < logsData.length; i++) {
+    const row = logsData[i];
+    const rowStaffId = String(row[0]);
+    const rowDate = row[2] instanceof Date ? Utilities.formatDate(row[2], TIMEZONE, "yyyy-MM-dd") : String(row[2]);
+    if (rowStaffId === staffId && rowDate === dateStr) {
+      return { success: false, message: "คุณได้บันทึกเข้างานไปแล้วในวันนี้" };
+    }
+  }
+
   logsSheet.appendRow([staffId, userRow[2], dateStr, timeStr, latitude, longitude, "", "", "", "", siteId, ""]);
   
   return { 
