@@ -199,8 +199,8 @@ function handleClockIn(data) {
   const dateStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
   const timeStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
 
-  // ตรวจสอบการบันทึกซ้ำภายใน 12 ชั่วโมง
-  const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+  // ตรวจสอบการบันทึกซ้ำภายใน 6 ชั่วโมง
+  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
   for (let i = logsData.length - 1; i >= 1; i--) {
     const row = logsData[i];
     const rowStaffId = String(row[0]);
@@ -221,13 +221,13 @@ function handleClockIn(data) {
 
       if (!isNaN(lastClockIn.getTime())) {
         const diff = now.getTime() - lastClockIn.getTime();
-        if (diff < TWELVE_HOURS_MS) {
-          const remainingMs = TWELVE_HOURS_MS - diff;
+        if (diff < SIX_HOURS_MS) {
+          const remainingMs = SIX_HOURS_MS - diff;
           const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
           const remainingMins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
           return { 
             success: false, 
-            message: `คุณได้บันทึกเข้างานไปแล้วเมื่อ ${remainingHours} ชม. ${remainingMins} นาทีที่ผ่านมา (กรุณารอให้ครบ 12 ชม.)` 
+            message: `คุณได้บันทึกเข้างานไปแล้วเมื่อ ${remainingHours} ชม. ${remainingMins} นาทีที่ผ่านมา (กรุณารอให้ครบ 6 ชม.)` 
           };
         }
       }

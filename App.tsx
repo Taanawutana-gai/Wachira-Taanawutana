@@ -88,8 +88,8 @@ const App: React.FC = () => {
   const handleClockIn = async () => {
     if (!user) return;
 
-    // ตรวจสอบการบันทึกซ้ำภายใน 12 ชั่วโมง (Client-side check)
-    const TWELVE_HOURS_MS = 12 * 60 * 60 * 1000;
+    // ตรวจสอบการบันทึกซ้ำภายใน 6 ชั่วโมง (Client-side check)
+    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
     const now = new Date();
     
     const lastLog = logs[logs.length - 1];
@@ -97,8 +97,8 @@ const App: React.FC = () => {
       const lastClockIn = new Date(`${lastLog.dateIn}T${lastLog.timeIn}`);
       if (!isNaN(lastClockIn.getTime())) {
         const diff = now.getTime() - lastClockIn.getTime();
-        if (diff < TWELVE_HOURS_MS) {
-          setError("คุณได้บันทึกเข้างานไปแล้วในช่วง 12 ชั่วโมงที่ผ่านมา");
+        if (diff < SIX_HOURS_MS) {
+          setError("คุณได้บันทึกเข้างานไปแล้วในช่วง 6 ชั่วโมงที่ผ่านมา");
           return;
         }
       }
