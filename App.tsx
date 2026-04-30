@@ -1,7 +1,7 @@
 
 import * as React from 'react';
 import { useState, useEffect } from 'react';
-import { User, LogType, GeoLocationData, OTRequest, OTStatus } from './types';
+import { User, LogType, GeoLocationData, OTRequest, OTStatus, Site } from './types';
 import { loginUser, sendClockAction, requestOT, updateOTStatus } from './services/sheetService';
 import { getDailyInsight } from './services/geminiService';
 import { initLiff, getLineProfile, LineProfile } from './services/lineService';
@@ -10,6 +10,8 @@ import { AttendanceStats } from './components/AttendanceStats';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
+  const [sites, setSites] = useState<Site[]>([]);
+  const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [lineProfile, setLineProfile] = useState<LineProfile | null>(null);
   const [logs, setLogs] = useState<any[]>([]);
   const [otRequests, setOtRequests] = useState<OTRequest[]>([]);
@@ -75,6 +77,10 @@ const App: React.FC = () => {
         setUser(result.user);
         setLogs(result.logs || []);
         setOtRequests(result.otRequests || []);
+        setSites(result.sites || []);
+        if (result.sites && result.sites.length > 0) {
+          setSelectedSiteId(result.sites[0].id);
+        }
       } else {
         setError(result.message || "การเข้าสู่ระบบล้มเหลว ตรวจสอบรหัสพนักงานของคุณ");
       }
@@ -88,18 +94,20 @@ const App: React.FC = () => {
   const handleClockIn = async () => {
     if (!user) return;
 
-    // ตรวจสอบการบันทึกซ้ำภายใน 6 ชั่วโมง (Client-side check)
-    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-    const now = new Date();
-    
-    const lastLog = logs[logs.length - 1];
-    if (lastLog && lastLog.dateIn && lastLog.timeIn) {
-      const lastClockIn = new Date(`${lastLog.dateIn}T${lastLog.timeIn}`);
-      if (!isNaN(lastClockIn.getTime())) {
-        const diff = now.getTime() - lastClockIn.getTime();
-        if (diff < SIX_HOURS_MS) {
-          setError("คุณได้บันทึกเข้างานไปแล้วในช่วง 6 ชั่วโมงที่ผ่านมา");
-          return;
+    // ตรวจสอบการบันทึกซ้ำภายใน 6 ชั่วโมง (Client-side check) - ยกเว้น Supervisor
+    if (user.role !== 'Supervisor') {
+      const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+      const now = new Date();
+      
+      const lastLog = logs[logs.length - 1];
+      if (lastLog && lastLog.dateIn && lastLog.timeIn) {
+        const lastClockIn = new Date(`${lastLog.dateIn}T${lastLog.timeIn}`);
+        if (!isNaN(lastClockIn.getTime())) {
+          const diff = now.getTime() - lastClockIn.getTime();
+          if (diff < SIX_HOURS_MS) {
+            setError("คุณได้บันทึกเข้างานไปแล้วในช่วง 6 ชั่วโมงที่ผ่านมา");
+            return;
+          }
         }
       }
     }
@@ -111,7 +119,7 @@ const App: React.FC = () => {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
           accuracy: pos.coords.accuracy
-        });
+        }, user.role === 'Supervisor' ? selectedSiteId : undefined);
         if (result.success) {
           setLogs(result.logs || []);
           setOtRequests(result.otRequests || []);
@@ -141,7 +149,7 @@ const App: React.FC = () => {
           latitude: pos.coords.latitude,
           longitude: pos.coords.longitude,
           accuracy: pos.coords.accuracy
-        });
+        }, user.role === 'Supervisor' ? selectedSiteId : undefined);
         if (result.success) {
           setLogs(result.logs || []);
           setOtRequests(result.otRequests || []);
@@ -342,6 +350,24 @@ const App: React.FC = () => {
         )}
 
         <section className="bg-white p-8 rounded-[40px] shadow-xl shadow-slate-200/50 border border-slate-50">
+          {user.role === 'Supervisor' && sites.length > 0 && (
+            <div className="mb-6 space-y-2">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center gap-2">
+                <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" strokeWidth="2.5"></path><path d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" strokeWidth="2.5"></path></svg>
+                Select Site (Site_Config)
+              </label>
+              <select 
+                value={selectedSiteId} 
+                onChange={(e) => setSelectedSiteId(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-100 rounded-2xl px-4 py-3 text-sm font-bold text-slate-700 outline-none focus:ring-2 focus:ring-blue-100 appearance-none shadow-inner"
+              >
+                {sites.map(site => (
+                  <option key={site.id} value={site.id}>{site.name}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="grid grid-cols-2 gap-6">
               <Button onClick={handleClockIn} variant="primary" className="h-32 flex-col text-sm rounded-[32px]" isLoading={isLoading}>
                 <div className="p-3 bg-white/20 rounded-2xl mb-2">

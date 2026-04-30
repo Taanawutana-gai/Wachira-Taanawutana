@@ -84,6 +84,14 @@ function getOTRequests(staffId, role, siteId) {
     .reverse();
 }
 
+function getAllSites() {
+  const data = getSheetData(SHEET_SITE_CONFIG);
+  return data.map(row => ({
+    id: String(row[0]),
+    name: String(row[1]) || String(row[0])
+  }));
+}
+
 function handleLogin(username, password) {
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]).trim() === String(username).trim() && String(row[1]).trim() === String(password).trim());
@@ -104,7 +112,8 @@ function handleLogin(username, password) {
     success: true,
     user: userObj,
     logs: getUserLogs(staffId),
-    otRequests: getOTRequests(staffId, userObj.role, userObj.siteId)
+    otRequests: getOTRequests(staffId, userObj.role, userObj.siteId),
+    sites: userObj.role === 'Supervisor' ? getAllSites() : []
   };
 }
 
@@ -181,14 +190,14 @@ function validateLocation(role, siteId, userLat, userLng) {
 }
 
 function handleClockIn(data) {
-  const { username, latitude, longitude } = data;
+  const { username, latitude, longitude, selectedSiteId } = data;
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
   if (!userRow) return { success: false, message: "ไม่พบข้อมูลพนักงาน" };
   
   const staffId = String(userRow[1]); 
-  const siteId = userRow[3];
   const userRole = userRow[4];
+  const siteId = (userRole === 'Supervisor' && selectedSiteId) ? selectedSiteId : userRow[3];
 
   const locationCheck = validateLocation(userRole, siteId, latitude, longitude);
   if (!locationCheck.allowed) return { success: false, message: locationCheck.message };
@@ -199,40 +208,42 @@ function handleClockIn(data) {
   const dateStr = Utilities.formatDate(now, TIMEZONE, "yyyy-MM-dd");
   const timeStr = Utilities.formatDate(now, TIMEZONE, "HH:mm:ss");
 
-  // ตรวจสอบการบันทึกซ้ำภายใน 6 ชั่วโมง
-  const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
-  for (let i = logsData.length - 1; i >= 1; i--) {
-    const row = logsData[i];
-    const rowStaffId = String(row[0]);
-    if (rowStaffId === staffId) {
-      const rowDate = row[2];
-      const rowTime = row[3];
-      
-      let lastClockIn;
-      if (rowDate instanceof Date && rowTime instanceof Date) {
-        // กรณีเป็น Date object จาก Google Sheets
-        const dStr = Utilities.formatDate(rowDate, TIMEZONE, "yyyy-MM-dd");
-        const tStr = Utilities.formatDate(rowTime, TIMEZONE, "HH:mm:ss");
-        lastClockIn = new Date(dStr + "T" + tStr);
-      } else {
-        // กรณีเป็น string
-        lastClockIn = new Date(String(row[2]).split('T')[0] + "T" + String(row[3]));
-      }
-
-      if (!isNaN(lastClockIn.getTime())) {
-        const diff = now.getTime() - lastClockIn.getTime();
-        if (diff < SIX_HOURS_MS) {
-          const remainingMs = SIX_HOURS_MS - diff;
-          const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
-          const remainingMins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
-          return { 
-            success: false, 
-            message: `คุณได้บันทึกเข้างานไปแล้วเมื่อ ${remainingHours} ชม. ${remainingMins} นาทีที่ผ่านมา (กรุณารอให้ครบ 6 ชม.)` 
-          };
+  // ตรวจสอบการบันทึกซ้ำภายใน 6 ชั่วโมง (เฉพาะพนักงานที่ไม่ใช่ Supervisor)
+  if (userRole !== 'Supervisor') {
+    const SIX_HOURS_MS = 6 * 60 * 60 * 1000;
+    for (let i = logsData.length - 1; i >= 1; i--) {
+      const row = logsData[i];
+      const rowStaffId = String(row[0]);
+      if (rowStaffId === staffId) {
+        const rowDate = row[2];
+        const rowTime = row[3];
+        
+        let lastClockIn;
+        if (rowDate instanceof Date && rowTime instanceof Date) {
+          // กรณีเป็น Date object จาก Google Sheets
+          const dStr = Utilities.formatDate(rowDate, TIMEZONE, "yyyy-MM-dd");
+          const tStr = Utilities.formatDate(rowTime, TIMEZONE, "HH:mm:ss");
+          lastClockIn = new Date(dStr + "T" + tStr);
+        } else {
+          // กรณีเป็น string
+          lastClockIn = new Date(String(row[2]).split('T')[0] + "T" + String(row[3]));
         }
+
+        if (!isNaN(lastClockIn.getTime())) {
+          const diff = now.getTime() - lastClockIn.getTime();
+          if (diff < SIX_HOURS_MS) {
+            const remainingMs = SIX_HOURS_MS - diff;
+            const remainingHours = Math.floor(remainingMs / (1000 * 60 * 60));
+            const remainingMins = Math.floor((remainingMs % (1000 * 60 * 60)) / (1000 * 60));
+            return { 
+              success: false, 
+              message: `คุณได้บันทึกเข้างานไปแล้วเมื่อ ${remainingHours} ชม. ${remainingMins} นาทีที่ผ่านมา (กรุณารอให้ครบ 6 ชม.)` 
+            };
+          }
+        }
+        // ตรวจสอบเฉพาะรายการล่าสุดของพนักงานคนนี้
+        break;
       }
-      // ตรวจสอบเฉพาะรายการล่าสุดของพนักงานคนนี้
-      break;
     }
   }
 
@@ -247,14 +258,14 @@ function handleClockIn(data) {
 }
 
 function handleClockOut(data) {
-  const { username, latitude, longitude } = data;
+  const { username, latitude, longitude, selectedSiteId } = data;
   const db = getSheetData(SHEET_EMPLOY_DB);
   const userRow = db.find(row => String(row[0]) === String(username));
   if (!userRow) return { success: false, message: "ไม่พบข้อมูลพนักงาน" };
 
   const staffId = String(userRow[1]);
-  const siteId = userRow[3];
   const userRole = userRow[4];
+  const siteId = (userRole === 'Supervisor' && selectedSiteId) ? selectedSiteId : userRow[3];
 
   const locationCheck = validateLocation(userRole, siteId, latitude, longitude);
   if (!locationCheck.allowed) return { success: false, message: locationCheck.message };

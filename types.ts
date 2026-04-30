@@ -49,10 +49,16 @@ export interface AttendanceLog {
   workingHours?: string;
 }
 
+export interface Site {
+  id: string;
+  name: string;
+}
+
 export interface ApiResponse {
   success: boolean;
   message?: string;
   user?: User;
   logs?: any[];
   otRequests?: OTRequest[];
+  sites?: Site[];
 }

@@ -18,7 +18,7 @@ export const loginUser = async (username: string, password: string): Promise<Api
   }
 };
 
-export const sendClockAction = async (username: string, type: LogType, location: GeoLocationData): Promise<ApiResponse> => {
+export const sendClockAction = async (username: string, type: LogType, location: GeoLocationData, selectedSiteId?: string): Promise<ApiResponse> => {
   try {
     const response = await fetch(SCRIPT_URL, {
       method: 'POST',
@@ -29,7 +29,8 @@ export const sendClockAction = async (username: string, type: LogType, location:
         username,
         latitude: location.latitude,
         longitude: location.longitude,
-        accuracy: location.accuracy
+        accuracy: location.accuracy,
+        selectedSiteId
       })
     });
     const text = await response.text();
