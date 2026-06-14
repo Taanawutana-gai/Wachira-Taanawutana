@@ -1,6 +1,6 @@
 
 /**
- * GEO CLOCK AI - BACKEND (With OT Approval System & Geofencing)
+ * TIME CLOCK IN-OUT - BACKEND (With OT Approval System & Geofencing)
  */
 
 const SHEET_EMPLOY_DB = "Employ_DB";
@@ -10,7 +10,7 @@ const SHEET_OT_REQUESTS = "OT_Requests";
 const TIMEZONE = "Asia/Bangkok"; 
 
 function doGet(e) {
-  return ContentService.createTextOutput("GeoClock AI Backend is Running.");
+  return ContentService.createTextOutput("Time Clock IN-OUT Backend is Running.");
 }
 
 function doPost(e) {
@@ -48,7 +48,7 @@ function getSiteConfig(siteId) {
   return {
     lat: parseFloat(site[2]),
     lng: parseFloat(site[3]),
-    radius: parseFloat(site[4]) || 200 
+    radius: parseFloat(site[4]) || 50 
   };
 }
 
@@ -173,16 +173,17 @@ function getUserLogs(staffId) {
 }
 
 function validateLocation(role, siteId, userLat, userLng) {
-  if (role !== 'Fixed') return { allowed: true };
+  if (role !== 'Fixed' && role !== 'Supervisor') return { allowed: true };
   
   const config = getSiteConfig(siteId);
   if (!config) return { allowed: false, message: "ไม่พบการตั้งค่าพิกัดสำหรับไซต์งานนี้" };
   
+  const radius = role === 'Supervisor' ? 50 : config.radius;
   const distance = calculateDistance(userLat, userLng, config.lat, config.lng);
-  if (distance > config.radius) {
+  if (distance > radius) {
     return { 
       allowed: false, 
-      message: `อยู่นอกพื้นที่ปฏิบัติงาน (${distance.toFixed(0)} ม.) รัศมีที่อนุญาตคือ ${config.radius} ม.` 
+      message: `อยู่นอกพื้นที่ปฏิบัติงาน (${distance.toFixed(0)} ม.) รัศมีที่อนุญาตคือ ${radius} ม.` 
     };
   }
   
@@ -312,6 +313,7 @@ function handleClockOut(data) {
   logsSheet.getRange(rowIndex, 9).setValue(latitude);
   logsSheet.getRange(rowIndex, 10).setValue(longitude);
   logsSheet.getRange(rowIndex, 12).setValue(workingHoursResult);
+  logsSheet.getRange(rowIndex, 13).setValue(siteId);
 
   return { 
     success: true, 

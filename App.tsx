@@ -247,7 +247,7 @@ const App: React.FC = () => {
                 </div>
               </div>
               
-              <h1 className="text-2xl font-black text-slate-800 mt-5 mb-0.5 tracking-tight">GeoClock</h1>
+              <h1 className="text-2xl font-black text-slate-800 mt-5 mb-0.5 tracking-tight">Time Clock IN-OUT</h1>
               <p className="text-slate-400 text-xs font-medium italic">SMC Attendance System</p>
             </div>
             
