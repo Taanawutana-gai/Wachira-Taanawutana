@@ -48,7 +48,7 @@ function getSiteConfig(siteId) {
   return {
     lat: parseFloat(site[2]),
     lng: parseFloat(site[3]),
-    radius: parseFloat(site[4]) || 50 
+    radius: parseFloat(site[4]) || 100 
   };
 }
 
@@ -178,7 +178,7 @@ function validateLocation(role, siteId, userLat, userLng) {
   const config = getSiteConfig(siteId);
   if (!config) return { allowed: false, message: "ไม่พบการตั้งค่าพิกัดสำหรับไซต์งานนี้" };
   
-  const radius = role === 'Supervisor' ? 50 : config.radius;
+  const radius = role === 'Supervisor' ? 100 : config.radius;
   const distance = calculateDistance(userLat, userLng, config.lat, config.lng);
   if (distance > radius) {
     return { 
