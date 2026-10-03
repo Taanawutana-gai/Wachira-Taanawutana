@@ -1,6 +1,5 @@
 
 import * as React from 'react';
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 interface AttendanceStatsProps {
   logs: any[];
@@ -26,35 +25,6 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
     if (minMatch) totalHours += parseInt(minMatch[1], 10) / 60;
     
     return isNaN(totalHours) ? 0 : totalHours;
-  };
-
-  // กรองและประมวลผลข้อมูลสำหรับกราฟ 7 วันล่าสุด
-  const processChartData = () => {
-    const last7DaysMap: Record<string, { day: string, date: string, hours: number }> = {};
-    const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-    
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
-      const dateKey = d.toISOString().split('T')[0];
-      last7DaysMap[dateKey] = {
-        day: days[d.getDay()],
-        date: dateKey,
-        hours: 0
-      };
-    }
-
-    logs.forEach(log => {
-      if (log.dateIn && last7DaysMap[log.dateIn]) {
-        const hours = parseWorkingHours(log.workingHours);
-        last7DaysMap[log.dateIn].hours += hours;
-      }
-    });
-
-    return Object.values(last7DaysMap).map(item => ({
-      ...item,
-      hours: parseFloat(item.hours.toFixed(2))
-    }));
   };
 
   // คำนวณสถิติรายเดือน
@@ -89,7 +59,6 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
     };
   };
 
-  const chartData = processChartData();
   const monthlyStats = calculateMonthlyStats();
 
   return (
@@ -108,38 +77,6 @@ export const AttendanceStats: React.FC<AttendanceStatsProps> = ({ logs }) => {
             <span className="text-[9px] text-slate-400 font-bold uppercase mb-1 text-center leading-tight">Days<br/>(เดือนนี้)</span>
             <span className="text-lg font-black text-slate-700">{monthlyStats.days}</span>
         </div>
-      </div>
-
-      {/* Chart */}
-      <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 w-full h-64">
-        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-6 flex justify-between items-center">
-          weekly performance
-          <span className="text-[10px] font-normal normal-case bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">7 วันล่าสุด</span>
-        </h3>
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart data={chartData}>
-            <XAxis 
-              dataKey="day" 
-              axisLine={false} 
-              tickLine={false} 
-              tick={{ fontSize: 10, fill: '#94a3b8', fontWeight: 600 }} 
-              dy={10}
-            />
-            <Tooltip 
-              cursor={{ fill: '#f8fafc', radius: 8 }}
-              contentStyle={{ borderRadius: '12px', border: 'none', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontSize: '12px' }}
-              formatter={(value: any) => [`${value} hrs`, 'Work Time']}
-            />
-            <Bar dataKey="hours" radius={[6, 6, 0, 0]} barSize={24}>
-               {chartData.map((entry, index) => (
-                  <Cell 
-                    key={`cell-${index}`} 
-                    fill={entry.hours > 0 ? (index === chartData.length - 1 ? '#2563eb' : '#6366f1') : '#f1f5f9'} 
-                  />
-                ))}
-            </Bar>
-          </BarChart>
-        </ResponsiveContainer>
       </div>
     </div>
   );
