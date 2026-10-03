@@ -1,12 +1,19 @@
 
 import * as React from 'react';
 import { useState, useEffect } from 'react';
-import { User, LogType, GeoLocationData, OTRequest, OTStatus, Site } from './types';
-import { loginUser, sendClockAction, requestOT, updateOTStatus } from './services/sheetService';
-import { getDailyInsight } from './services/geminiService';
+import { User, LogType, Site } from './types';
+import { loginUser, sendClockAction } from './services/sheetService';
+import { getDailyInsight } from './services/greetingService';
 import { initLiff, getLineProfile, LineProfile } from './services/lineService';
 import { Button } from './components/Button';
 import { AttendanceStats } from './components/AttendanceStats';
+
+const GEO_OPTIONS: PositionOptions = { timeout: 20000, maximumAge: 0 };
+
+const geoErrorMessage = (err: GeolocationPositionError) =>
+  err.code === err.PERMISSION_DENIED
+    ? "กรุณาเปิดการเข้าถึงพิกัด (Location Services)"
+    : "หาตำแหน่งไม่สำเร็จ กรุณาลองใหม่ในที่โล่งหรือใกล้หน้าต่าง";
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -14,7 +21,6 @@ const App: React.FC = () => {
   const [selectedSiteId, setSelectedSiteId] = useState<string>("");
   const [lineProfile, setLineProfile] = useState<LineProfile | null>(null);
   const [logs, setLogs] = useState<any[]>([]);
-  const [otRequests, setOtRequests] = useState<OTRequest[]>([]);
   
   const [usernameInput, setUsernameInput] = useState("");
   const [passwordInput, setPasswordInput] = useState("");
@@ -23,17 +29,6 @@ const App: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
   const [aiInsight, setAiInsight] = useState<string | null>(null);
-  
-  const [isOTModalOpen, setIsOTModalOpen] = useState(false);
-  
-  const defaultStart = new Date();
-  defaultStart.setHours(18, 0, 0, 0);
-  const defaultEnd = new Date();
-  defaultEnd.setHours(20, 0, 0, 0);
-
-  const [otStartTime, setOtStartTime] = useState(defaultStart.toISOString().slice(0, 16));
-  const [otEndTime, setOtEndTime] = useState(defaultEnd.toISOString().slice(0, 16));
-  const [otReason, setOtReason] = useState("");
 
   useEffect(() => {
     const startLiff = async () => {
@@ -56,6 +51,15 @@ const App: React.FC = () => {
     startLiff();
   }, []);
 
+  // ปิดกล่องแจ้งเตือนอัตโนมัติหลัง 4 วินาที
+  useEffect(() => {
+    if (!success && !error) return;
+    const t = setTimeout(() => { setSuccess(null); setError(null); }, 4000);
+    return () => clearTimeout(t);
+  }, [success, error]);
+
+  const clearMessages = () => { setSuccess(null); setError(null); };
+
   const handleLineConnect = async () => {
     setIsLoading(true);
     const profile = await getLineProfile();
@@ -70,13 +74,12 @@ const App: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
-    setError(null);
+    clearMessages();
     try {
       const result = await loginUser(usernameInput, passwordInput);
       if (result.success && result.user) {
         setUser(result.user);
         setLogs(result.logs || []);
-        setOtRequests(result.otRequests || []);
         setSites(result.sites || []);
         if (result.sites && result.sites.length > 0) {
           setSelectedSiteId(result.sites[0].id);
@@ -93,6 +96,7 @@ const App: React.FC = () => {
 
   const handleClockIn = async () => {
     if (!user) return;
+    clearMessages();
 
     // ตรวจสอบการบันทึกซ้ำภายใน 6 ชั่วโมง (Client-side check) - ยกเว้น Supervisor
     if (user.role !== 'Supervisor') {
@@ -101,7 +105,7 @@ const App: React.FC = () => {
       
       const lastLog = logs[logs.length - 1];
       if (lastLog && lastLog.dateIn && lastLog.timeIn) {
-        const lastClockIn = new Date(`${lastLog.dateIn}T${lastLog.timeIn}`);
+        const lastClockIn = new Date(`${lastLog.dateIn}T${lastLog.timeIn}+07:00`);
         if (!isNaN(lastClockIn.getTime())) {
           const diff = now.getTime() - lastClockIn.getTime();
           if (diff < SIX_HOURS_MS) {
@@ -121,19 +125,17 @@ const App: React.FC = () => {
           accuracy: pos.coords.accuracy
         }, user.role === 'Supervisor' ? selectedSiteId : undefined);
         if (result.success) {
-          setLogs(result.logs || []);
-          setOtRequests(result.otRequests || []);
+          if (result.logs) setLogs(result.logs);
           setSuccess(result.message || "บันทึกเข้างานสำเร็จ");
-          const insight = await getDailyInsight(user.name, 'in', new Date().toLocaleTimeString());
-          setAiInsight(insight);
+          setAiInsight(getDailyInsight(user.name, 'in'));
         } else {
           setError(result.message || "บันทึกเข้างานไม่สำเร็จ");
         }
         setIsLoading(false);
       }, (err) => {
-        setError("กรุณาเปิดการเข้าถึงพิกัด (Location Services)");
+        setError(geoErrorMessage(err));
         setIsLoading(false);
-      });
+      }, GEO_OPTIONS);
     } catch (err) {
       setError("การดำเนินการล้มเหลว");
       setIsLoading(false);
@@ -142,6 +144,7 @@ const App: React.FC = () => {
 
   const handleClockOut = async () => {
     if (!user) return;
+    clearMessages();
     setIsLoading(true);
     try {
       navigator.geolocation.getCurrentPosition(async (pos) => {
@@ -151,75 +154,19 @@ const App: React.FC = () => {
           accuracy: pos.coords.accuracy
         }, user.role === 'Supervisor' ? selectedSiteId : undefined);
         if (result.success) {
-          setLogs(result.logs || []);
-          setOtRequests(result.otRequests || []);
+          if (result.logs) setLogs(result.logs);
           setSuccess(result.message || "บันทึกออกงานสำเร็จ");
-          const insight = await getDailyInsight(user.name, 'out', new Date().toLocaleTimeString());
-          setAiInsight(insight);
+          setAiInsight(getDailyInsight(user.name, 'out'));
         } else {
           setError(result.message || "บันทึกออกงานไม่สำเร็จ");
         }
         setIsLoading(false);
       }, (err) => {
-        setError("กรุณาเปิดการเข้าถึงพิกัด (Location Services)");
+        setError(geoErrorMessage(err));
         setIsLoading(false);
-      });
+      }, GEO_OPTIONS);
     } catch (err) {
       setError("การดำเนินการล้มเหลว");
-      setIsLoading(false);
-    }
-  };
-
-  const handleOTRequestSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      const result = await requestOT({
-        staffId: user.password!,
-        name: user.name,
-        siteId: user.siteId,
-        startTime: otStartTime.replace('T', ' '),
-        endTime: otEndTime.replace('T', ' '),
-        reason: otReason,
-        role: user.role
-      });
-      if (result.success) {
-        setOtRequests(result.otRequests || []);
-        setIsOTModalOpen(false);
-        setSuccess(result.message || "ส่งคำขอ OT เรียบร้อยแล้ว");
-        setOtReason("");
-      } else {
-        setError(result.message || "ส่งคำขอ OT ล้มเหลว");
-      }
-    } catch (err) {
-      setError("Network error.");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleApproveReject = async (requestId: string, status: OTStatus) => {
-    if (!user) return;
-    setIsLoading(true);
-    try {
-      const result = await updateOTStatus({
-        requestId,
-        status,
-        approverName: user.name,
-        staffId: user.password!,
-        role: user.role,
-        siteId: user.siteId
-      });
-      if (result.success) {
-        setOtRequests(result.otRequests || []);
-        setSuccess(`ดำเนินการ ${status === OTStatus.APPROVED ? 'อนุมัติ' : 'ปฏิเสธ'} เรียบร้อยแล้ว`);
-      } else {
-        setError(result.message || "การอัปเดตล้มเหลว");
-      }
-    } catch (err) {
-      setError("Network error.");
-    } finally {
       setIsLoading(false);
     }
   };
@@ -256,7 +203,7 @@ const App: React.FC = () => {
               <div className="space-y-1.5">
                 <div className="flex items-center gap-2 ml-1">
                   <svg className="w-3 h-3 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">USE ID</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-[0.1em]">USER ID</label>
                 </div>
                 <div className="bg-[#f5f9ff] rounded-[20px] px-5 py-4 border border-blue-50">
                   <input 
@@ -295,7 +242,7 @@ const App: React.FC = () => {
                 type="submit" 
                 variant="primary" 
                 fullWidth 
-                className="py-4.5 rounded-[24px] text-base font-black shadow-xl shadow-blue-100 uppercase tracking-widest gap-2.5" 
+                className="py-[18px] rounded-[24px] text-base font-black shadow-xl shadow-blue-100 uppercase tracking-widest gap-2.5" 
                 isLoading={isLoading} 
                 disabled={!usernameInput}
               >
@@ -384,135 +331,11 @@ const App: React.FC = () => {
           </div>
         </section>
 
-        <section className="space-y-4">
-          <div className="flex justify-between items-center px-2">
-            <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest">Active Requests</h3>
-            <button 
-              onClick={() => setIsOTModalOpen(true)} 
-              className="text-[11px] font-black text-blue-600 bg-blue-50 px-5 py-2.5 rounded-full hover:bg-blue-600 hover:text-white transition-all flex items-center gap-2 shadow-sm active:scale-95"
-            >
-              <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 4v16m8-8H4" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-              REQUEST OT
-            </button>
-          </div>
-          
-          <div className="space-y-4">
-            {otRequests.length === 0 ? (
-              <div className="bg-white p-12 rounded-[40px] text-center text-slate-400 text-sm border-2 border-dashed border-slate-100">
-                <div className="w-16 h-16 bg-slate-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <svg className="w-8 h-8 text-slate-200" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-                </div>
-                <p className="font-bold tracking-tight">ไม่พบคำขอที่อยู่ระหว่างดำเนินการ</p>
-              </div>
-            ) : (
-              otRequests.map(req => (
-                <div key={req.id} className="bg-white p-5 rounded-[32px] shadow-lg shadow-slate-100/50 border border-slate-50 flex justify-between items-start transition-all hover:translate-y-[-2px]">
-                  <div className="space-y-1">
-                    <div className="flex flex-col mb-1">
-                       <span className="text-[10px] text-blue-600 font-black uppercase tracking-widest mb-0.5">Time Range</span>
-                       <span className="text-xs font-black text-slate-800">{req.startTime} น.</span>
-                       <span className="text-xs font-black text-slate-400 flex items-center gap-1">
-                         <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M19 14l-7 7m0 0l-7-7m7 7V3" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-                         {req.endTime} น.
-                       </span>
-                    </div>
-                    <p className="text-xs text-slate-500 font-medium leading-relaxed max-w-[210px] mt-2">{req.reason}</p>
-                    {user.role === 'Supervisor' && (
-                       <div className="flex items-center gap-2 mt-3 p-1.5 bg-slate-50 rounded-2xl w-fit">
-                         <div className="w-6 h-6 rounded-xl bg-blue-600 flex items-center justify-center text-[10px] font-black text-white shadow-sm">{req.name.charAt(0)}</div>
-                         <span className="text-[10px] text-slate-600 font-black tracking-tight">{req.name}</span>
-                       </div>
-                    )}
-                  </div>
-                  <div className="flex flex-col items-end gap-4">
-                    <span className={`text-[9px] font-black px-4 py-1.5 rounded-full uppercase tracking-widest shadow-sm border-2 ${
-                      req.status === 'Approved' ? 'bg-green-50 text-green-600 border-green-100' :
-                      req.status === 'Rejected' ? 'bg-red-50 text-red-600 border-red-100' : 'bg-yellow-50 text-yellow-600 border-yellow-100 animate-pulse'
-                    }`}>
-                      {req.status === 'Approved' ? 'อนุมัติแล้ว' : req.status === 'Rejected' ? 'ปฏิเสธ' : 'รออนุมัติ'}
-                    </span>
-                    {user.role === 'Supervisor' && req.status === 'Pending' && (
-                      <div className="flex gap-2">
-                        <button 
-                          onClick={() => handleApproveReject(req.id, OTStatus.APPROVED)} 
-                          className="p-3 bg-green-500 text-white hover:bg-green-600 rounded-2xl transition-all shadow-lg shadow-green-100 active:scale-90"
-                          title="Approve"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M5 13l4 4L19 7" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-                        </button>
-                        <button 
-                          onClick={() => handleApproveReject(req.id, OTStatus.REJECTED)} 
-                          className="p-3 bg-red-500 text-white hover:bg-red-600 rounded-2xl transition-all shadow-lg shadow-red-100 active:scale-90"
-                          title="Reject"
-                        >
-                          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </section>
-
         <section>
           <h3 className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-5 ml-2">Monthly Stats</h3>
           <AttendanceStats logs={logs} />
         </section>
       </main>
-
-      {/* OT Request Modal */}
-      {isOTModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-md animate-fade-in">
-          <div className="bg-white rounded-[48px] shadow-2xl w-full max-w-sm p-10 space-y-8 animate-scale-in relative border border-slate-100">
-            <button onClick={() => setIsOTModalOpen(false)} className="absolute top-8 right-8 text-slate-300 hover:text-slate-600 transition-colors p-2 bg-slate-50 rounded-2xl">
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M6 18L18 6M6 6l12 12" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"></path></svg>
-            </button>
-            
-            <div className="space-y-2">
-              <h3 className="text-3xl font-black text-slate-800">New Request</h3>
-              <p className="text-slate-400 font-medium text-sm">ระบุช่วงเวลาที่คุณจะทำ OT</p>
-            </div>
-
-            <form onSubmit={handleOTRequestSubmit} className="space-y-5">
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">เวลาเริ่มต้น</label>
-                <input 
-                  type="datetime-local" 
-                  value={otStartTime} 
-                  onChange={(e) => setOtStartTime(e.target.value)} 
-                  className="w-full px-6 py-4 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold text-sm" 
-                  required 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">เวลาสิ้นสุด</label>
-                <input 
-                  type="datetime-local" 
-                  value={otEndTime} 
-                  onChange={(e) => setOtEndTime(e.target.value)} 
-                  className="w-full px-6 py-4 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold text-sm" 
-                  required 
-                />
-              </div>
-              <div className="space-y-2">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">รายละเอียด / เหตุผล</label>
-                <textarea 
-                  value={otReason} 
-                  onChange={(e) => setOtReason(e.target.value)} 
-                  className="w-full px-6 py-5 rounded-[24px] bg-slate-50 border border-slate-200 outline-none focus:ring-4 focus:ring-blue-50 transition-all font-bold h-28 resize-none text-sm" 
-                  placeholder="คุณกำลังจะทำงานอะไร?" 
-                  required
-                ></textarea>
-              </div>
-              <div className="flex gap-4 pt-2">
-                <Button type="submit" variant="primary" fullWidth className="py-5 text-lg" isLoading={isLoading}>ส่งคำขอ</Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Floating Notifications */}
       {(success || error) && (
@@ -533,10 +356,8 @@ const App: React.FC = () => {
 
       <style>{`
         @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-        @keyframes scale-in { from { opacity: 0; transform: scale(0.9) translateY(20px); } to { opacity: 1; transform: scale(1) translateY(0); } }
         @keyframes bounce-short { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, -15px); } }
         .animate-fade-in { animation: fade-in 0.4s ease-out; }
-        .animate-scale-in { animation: scale-in 0.5s cubic-bezier(0.34, 1.56, 0.64, 1); }
         .animate-bounce-short { animation: bounce-short 2s ease-in-out infinite; }
       `}</style>
     </div>

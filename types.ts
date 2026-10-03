@@ -1,13 +1,11 @@
 
 export interface User {
   username: string; // This will be the LINE User ID
-  password?: string;
   name: string;
   siteId: string;
   role: 'Fixed' | 'Roaming' | 'Supervisor';
   position: string;
   avatarUrl?: string;
-  lineUserId?: string;
 }
 
 export enum LogType {
@@ -15,38 +13,10 @@ export enum LogType {
   CLOCK_OUT = 'CLOCK_OUT'
 }
 
-export enum OTStatus {
-  PENDING = 'Pending',
-  APPROVED = 'Approved',
-  REJECTED = 'Rejected'
-}
-
-export interface OTRequest {
-  id: string;
-  staffId: string;
-  name: string;
-  siteId: string;
-  reason: string;
-  startTime: string; // ISO format or YYYY-MM-DD HH:mm
-  endTime: string;   // ISO format or YYYY-MM-DD HH:mm
-  status: OTStatus;
-  approverName?: string;
-  timestamp: string;
-}
-
 export interface GeoLocationData {
   latitude: number;
   longitude: number;
   accuracy: number;
-}
-
-export interface AttendanceLog {
-  id: string;
-  userId?: string;
-  date: string;
-  clockInTime?: string;
-  clockOutTime?: string;
-  workingHours?: string;
 }
 
 export interface Site {
@@ -59,6 +29,5 @@ export interface ApiResponse {
   message?: string;
   user?: User;
   logs?: any[];
-  otRequests?: OTRequest[];
   sites?: Site[];
 }
